@@ -54,7 +54,7 @@ async function loadUser() {
   }
 }
 
-function goEdit() { uni.navigateTo({ url: '/pages/mine/edit' }); }
+function goEdit() { uni.navigateTo({ url: '/pages/edit-profile/index' }); }
 function goFriends() { uni.navigateTo({ url: '/pages/friends/index' }); }
 function goRequests() { uni.navigateTo({ url: '/pages/friend-requests/index' }); }
 function goAdmin() { uni.navigateTo({ url: '/pages/admin/index' }); }

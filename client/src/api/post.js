@@ -3,7 +3,8 @@ import { get, post, put, del } from './request';
 export const getPosts = (page = 1, limit = 20) =>
   get(`/posts?page=${page}&limit=${limit}`);
 
-export const createPost = (content) => post('/posts', { content });
+export const createPost = (content, media_urls = []) =>
+  post('/posts', { content, media_urls });
 
 export const deletePost = (id) => del(`/posts/${id}`);
 

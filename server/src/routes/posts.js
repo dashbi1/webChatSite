@@ -69,7 +69,7 @@ router.get('/', authMiddleware, async (req, res) => {
 
 // 发布帖子
 router.post('/', authMiddleware, async (req, res) => {
-  const { content } = req.body;
+  const { content, media_urls = [] } = req.body;
   const userId = req.user.id;
 
   if (!content || content.trim().length === 0) {
@@ -78,10 +78,20 @@ router.post('/', authMiddleware, async (req, res) => {
   if (content.length > 1000) {
     return res.status(400).json({ success: false, error: '内容不能超过1000字' });
   }
+  if (media_urls.length > 9) {
+    return res.status(400).json({ success: false, error: '图片最多9张' });
+  }
+
+  const mediaType = media_urls.length > 0 ? 'image' : 'none';
 
   const { data: inserted, error } = await supabase
     .from('posts')
-    .insert({ author_id: userId, content: content.trim() })
+    .insert({
+      author_id: userId,
+      content: content.trim(),
+      media_urls: media_urls,
+      media_type: mediaType,
+    })
     .select('*')
     .single();
 

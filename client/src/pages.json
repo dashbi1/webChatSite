@@ -53,7 +53,7 @@
       "style": { "navigationBarTitleText": "我的" }
     },
     {
-      "path": "pages/mine/edit",
+      "path": "pages/edit-profile/index",
       "style": { "navigationBarTitleText": "编辑资料" }
     },
     {
