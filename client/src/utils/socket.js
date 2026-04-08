@@ -27,6 +27,21 @@ export function getSocket() {
     console.log('[socket] disconnected:', reason);
   });
 
+  // 封禁踢出
+  socket.on('account:banned', () => {
+    uni.removeStorageSync('token');
+    uni.removeStorageSync('user');
+    disconnectSocket();
+    uni.showModal({
+      title: '账号已被封禁',
+      content: '您的账号因违规已被封禁，请联系管理员',
+      showCancel: false,
+      success: () => {
+        uni.reLaunch({ url: '/pages/login/index' });
+      },
+    });
+  });
+
   return socket;
 }
 

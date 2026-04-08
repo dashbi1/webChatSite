@@ -15,6 +15,16 @@ async function areFriends(userA, userB) {
   return !!data;
 }
 
+// 检查用户是否被封禁
+async function isBanned(userId) {
+  const { data } = await supabase
+    .from('users')
+    .select('status')
+    .eq('id', userId)
+    .single();
+  return data?.status === 'banned';
+}
+
 function setupSocket(io) {
   // JWT 认证中间件
   io.use((socket, next) => {
@@ -43,6 +53,18 @@ function setupSocket(io) {
 
       if (!receiverId || !content) {
         socket.emit('chat:error', { error: '缺少参数' });
+        return;
+      }
+
+      // 检查自己是否被封禁
+      if (await isBanned(userId)) {
+        socket.emit('account:banned', { error: '账号已被封禁' });
+        return;
+      }
+
+      // 检查对方是否被封禁
+      if (await isBanned(receiverId)) {
+        socket.emit('chat:error', { error: '对方账号已被封禁，无法发送消息' });
         return;
       }
 

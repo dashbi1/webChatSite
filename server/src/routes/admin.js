@@ -1,6 +1,7 @@
 const express = require('express');
 const supabase = require('../config/supabase');
 const { authMiddleware, adminMiddleware } = require('../middleware/auth');
+const { getIO } = require('../utils/notify');
 
 const router = express.Router();
 
@@ -44,6 +45,12 @@ router.put('/users/:id/ban', async (req, res) => {
 
   if (error) {
     return res.status(500).json({ success: false, error: '封禁失败' });
+  }
+
+  // 通过 Socket 踢出在线用户
+  const io = getIO();
+  if (io) {
+    io.to(id).emit('account:banned', { error: '账号已被封禁' });
   }
 
   res.json({ success: true });
@@ -193,6 +200,10 @@ router.put('/reports/:id', async (req, res) => {
     if (report.target_type === 'user') {
       // 封禁被举报用户
       await supabase.from('users').update({ status: 'banned' }).eq('id', report.target_id);
+      const io = getIO();
+      if (io) {
+        io.to(report.target_id).emit('account:banned', { error: '账号已被封禁' });
+      }
     } else if (report.target_type === 'post') {
       // 删除被举报帖子
       await supabase.from('posts').delete().eq('id', report.target_id);

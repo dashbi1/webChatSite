@@ -7,6 +7,10 @@ function setIO(io) {
   _io = io;
 }
 
+function getIO() {
+  return _io;
+}
+
 // 创建通知 + Socket 实时推送
 async function createNotification({ userId, triggerUserId, type, content, referenceId }) {
   const { data: notification, error } = await supabase
@@ -44,4 +48,4 @@ async function createNotification({ userId, triggerUserId, type, content, refere
   return notification;
 }
 
-module.exports = { setIO, createNotification };
+module.exports = { setIO, getIO, createNotification };

@@ -21,6 +21,18 @@ export function request(options) {
           reject(new Error('未登录'));
           return;
         }
+        if (res.statusCode === 403 && res.data?.code === 'BANNED') {
+          uni.removeStorageSync('token');
+          uni.removeStorageSync('user');
+          uni.showModal({
+            title: '账号已被封禁',
+            content: '您的账号因违规已被封禁，请联系管理员',
+            showCancel: false,
+            success: () => uni.reLaunch({ url: '/pages/login/index' }),
+          });
+          reject(new Error('账号已被封禁'));
+          return;
+        }
         if (res.statusCode >= 400) {
           const msg = res.data?.error || '请求失败';
           uni.showToast({ title: msg, icon: 'none' });
