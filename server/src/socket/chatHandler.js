@@ -1,6 +1,19 @@
 const jwt = require('jsonwebtoken');
 const supabase = require('../config/supabase');
 
+// 检查好友关系
+async function areFriends(userA, userB) {
+  const { data } = await supabase
+    .from('friendships')
+    .select('id')
+    .eq('status', 'accepted')
+    .or(
+      `and(requester_id.eq.${userA},addressee_id.eq.${userB}),and(requester_id.eq.${userB},addressee_id.eq.${userA})`
+    )
+    .single();
+  return !!data;
+}
+
 function setupSocket(io) {
   // JWT 认证中间件
   io.use((socket, next) => {
@@ -22,13 +35,22 @@ function setupSocket(io) {
 
     // 加入个人房间
     socket.join(userId);
-    console.log(`用户上线: ${userId}`);
 
     // 发送消息
     socket.on('chat:send', async (data) => {
       const { receiverId, content, messageType = 'text', referencePostId } = data;
 
-      if (!receiverId || !content) return;
+      if (!receiverId || !content) {
+        socket.emit('chat:error', { error: '缺少参数' });
+        return;
+      }
+
+      // 好友关系校验
+      const friends = await areFriends(userId, receiverId);
+      if (!friends) {
+        socket.emit('chat:error', { error: '只能与好友私聊' });
+        return;
+      }
 
       // 存入数据库
       const { data: message, error } = await supabase
@@ -43,19 +65,18 @@ function setupSocket(io) {
         .select('*')
         .single();
 
-      if (!error && message) {
-        const { data: senderUser } = await supabase
-          .from('users')
-          .select('id, nickname, avatar_url')
-          .eq('id', userId)
-          .single();
-        message.sender = senderUser;
-      }
-
       if (error) {
         socket.emit('chat:error', { error: '发送失败' });
         return;
       }
+
+      // 附加发送者信息
+      const { data: senderUser } = await supabase
+        .from('users')
+        .select('id, nickname, avatar_url')
+        .eq('id', userId)
+        .single();
+      message.sender = senderUser;
 
       // 推送给接收者
       io.to(receiverId).emit('chat:receive', message);
@@ -66,11 +87,13 @@ function setupSocket(io) {
     // 正在输入
     socket.on('chat:typing', (data) => {
       const { receiverId } = data;
-      io.to(receiverId).emit('chat:typing', { senderId: userId });
+      if (receiverId) {
+        io.to(receiverId).emit('chat:typing', { senderId: userId });
+      }
     });
 
     socket.on('disconnect', () => {
-      console.log(`用户下线: ${userId}`);
+      // 静默下线
     });
   });
 }

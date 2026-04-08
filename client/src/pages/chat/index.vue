@@ -3,7 +3,7 @@
     <scroll-view scroll-y class="msg-list" :scroll-into-view="scrollToId">
       <view
         v-for="(msg, idx) in messages"
-        :key="msg.id"
+        :key="msg.id || idx"
         :id="'msg-' + idx"
         class="msg-row"
         :class="{ 'msg-self': msg.sender_id === myId }"
@@ -22,6 +22,9 @@
           :src="myAvatar || '/static/default-avatar.png'"
         />
       </view>
+      <view v-if="messages.length === 0" class="empty">
+        <text>暂无消息，说点什么吧</text>
+      </view>
     </scroll-view>
 
     <view class="input-bar">
@@ -34,7 +37,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 import { getMessages } from '../../api/chat';
-import io from '../../utils/socket';
+import { getSocket } from '../../utils/socket';
 
 const messages = ref([]);
 const inputText = ref('');
@@ -49,9 +52,9 @@ let socket = null;
 onMounted(() => {
   const pages = getCurrentPages();
   const current = pages[pages.length - 1];
-  const opts = current.$page?.options || current.options;
-  friendId.value = opts?.friendId;
-  friendName.value = opts?.name || '聊天';
+  const opts = current.$page?.options || current.options || {};
+  friendId.value = opts.friendId;
+  friendName.value = decodeURIComponent(opts.name || '聊天');
 
   uni.setNavigationBarTitle({ title: friendName.value });
 
@@ -64,30 +67,43 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  if (socket) socket.disconnect();
+  // 不断开全局 socket，只移除本页监听
+  if (socket) {
+    socket.off('chat:receive', onReceive);
+    socket.off('chat:sent', onSent);
+  }
 });
 
 async function loadMessages() {
-  const res = await getMessages(friendId.value);
-  messages.value = res.data;
-  scrollToBottom();
+  try {
+    const res = await getMessages(friendId.value);
+    messages.value = res.data || [];
+    scrollToBottom();
+  } catch (e) {
+    // handled
+  }
 }
 
 function connectSocket() {
-  const token = uni.getStorageSync('token');
-  socket = io(token);
+  socket = getSocket();
+  if (!socket) return;
 
-  socket.on('chat:receive', (msg) => {
-    if (msg.sender_id === friendId.value) {
-      messages.value.push(msg);
-      scrollToBottom();
-    }
-  });
+  socket.on('chat:receive', onReceive);
+  socket.on('chat:sent', onSent);
+}
 
-  socket.on('chat:sent', (msg) => {
+function onReceive(msg) {
+  if (msg.sender_id === friendId.value) {
     messages.value.push(msg);
     scrollToBottom();
-  });
+  }
+}
+
+function onSent(msg) {
+  if (msg.receiver_id === friendId.value) {
+    messages.value.push(msg);
+    scrollToBottom();
+  }
 }
 
 function sendMsg() {
@@ -101,7 +117,10 @@ function sendMsg() {
 
 function scrollToBottom() {
   nextTick(() => {
-    scrollToId.value = `msg-${messages.value.length - 1}`;
+    scrollToId.value = '';
+    nextTick(() => {
+      scrollToId.value = `msg-${messages.value.length - 1}`;
+    });
   });
 }
 </script>
@@ -129,4 +148,5 @@ function scrollToBottom() {
 .msg-input { flex: 1; border: 1rpx solid #e0e0e0; border-radius: 32rpx; padding: 16rpx 24rpx; font-size: 28rpx; }
 .btn-send { width: 120rpx; background: #4A90D9; color: #fff; border: none; border-radius: 32rpx; font-size: 26rpx; margin-left: 16rpx; padding: 16rpx 0; }
 .btn-send[disabled] { opacity: 0.5; }
+.empty { text-align: center; padding: 60rpx; color: #999; font-size: 26rpx; }
 </style>
