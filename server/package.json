@@ -5,7 +5,12 @@
   "main": "src/app.js",
   "scripts": {
     "start": "node src/app.js",
-    "dev": "nodemon src/app.js"
+    "dev": "nodemon src/app.js",
+    "test": "jest --runInBand --forceExit",
+    "test:phase1": "jest tests/phase1 --runInBand --forceExit",
+    "test:phase2": "jest tests/phase2 --runInBand --forceExit",
+    "test:phase3": "jest tests/phase3 --runInBand --forceExit",
+    "test:phase4": "jest tests/phase4 --runInBand --forceExit"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.0",
@@ -19,6 +24,8 @@
     "undici": "^8.0.2"
   },
   "devDependencies": {
-    "nodemon": "^3.1.0"
+    "jest": "^30.3.0",
+    "nodemon": "^3.1.0",
+    "supertest": "^7.2.2"
   }
 }

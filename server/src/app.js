@@ -15,13 +15,6 @@ const notificationRoutes = require('./routes/notifications');
 const adminRoutes = require('./routes/admin');
 
 const app = express();
-const server = http.createServer(app);
-
-// Socket.io
-const io = new Server(server, {
-  cors: { origin: '*', methods: ['GET', 'POST'] },
-});
-setupSocket(io);
 
 // 中间件
 app.use(cors());
@@ -47,7 +40,18 @@ app.use((err, req, res, _next) => {
   res.status(500).json({ success: false, error: '服务器内部错误' });
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`工大圈子后端服务启动: http://localhost:${PORT}`);
-});
+// 仅在直接运行时启动服务器（非测试环境）
+if (require.main === module) {
+  const server = http.createServer(app);
+  const io = new Server(server, {
+    cors: { origin: '*', methods: ['GET', 'POST'] },
+  });
+  setupSocket(io);
+
+  const PORT = process.env.PORT || 3000;
+  server.listen(PORT, () => {
+    console.log(`工大圈子后端服务启动: http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
