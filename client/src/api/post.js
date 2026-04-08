@@ -8,7 +8,8 @@ export const createPost = (content, media_urls = []) =>
 
 export const deletePost = (id) => del(`/posts/${id}`);
 
-export const editPost = (id, content) => put(`/posts/${id}`, { content });
+export const editPost = (id, content, media_urls) =>
+  put(`/posts/${id}`, { content, ...(media_urls !== undefined ? { media_urls } : {}) });
 
 export const toggleLike = (postId) => post(`/posts/${postId}/like`);
 

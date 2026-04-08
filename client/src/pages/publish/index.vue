@@ -48,6 +48,12 @@ onMounted(() => {
     isEdit.value = true;
     editId.value = opts.id;
     content.value = decodeURIComponent(opts.content || '');
+    if (opts.media) {
+      try {
+        const urls = JSON.parse(decodeURIComponent(opts.media));
+        images.value = urls.map(url => ({ tempPath: url, uploaded: true, url }));
+      } catch {}
+    }
     uni.setNavigationBarTitle({ title: '编辑帖子' });
   }
 });
@@ -103,7 +109,14 @@ async function handlePublish() {
   loading.value = true;
   try {
     if (isEdit.value) {
-      await editPost(editId.value, content.value);
+      // 编辑模式：上传新图片 + 保留已有图片
+      let mediaUrls;
+      if (images.value.length > 0) {
+        mediaUrls = await uploadImages();
+      } else {
+        mediaUrls = [];
+      }
+      await editPost(editId.value, content.value, mediaUrls);
       uni.showToast({ title: '修改成功', icon: 'success' });
     } else {
       const mediaUrls = images.value.length > 0 ? await uploadImages() : [];

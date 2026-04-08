@@ -103,8 +103,9 @@ function showActions() {
     success: (res) => {
       if (isSelf) {
         if (res.tapIndex === 0) {
+          const mediaParam = images.value.length > 0 ? `&media=${encodeURIComponent(JSON.stringify(images.value))}` : '';
           uni.navigateTo({
-            url: `/pages/publish/index?id=${props.post.id}&content=${encodeURIComponent(props.post.content)}`,
+            url: `/pages/publish/index?id=${props.post.id}&content=${encodeURIComponent(props.post.content)}${mediaParam}`,
           });
         } else if (res.tapIndex === 1) {
           uni.showModal({

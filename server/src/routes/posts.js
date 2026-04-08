@@ -138,7 +138,7 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 // 编辑帖子
 router.put('/:id', authMiddleware, async (req, res) => {
   const { id } = req.params;
-  const { content } = req.body;
+  const { content, media_urls } = req.body;
   const userId = req.user.id;
 
   if (!content || content.trim().length === 0) {
@@ -155,9 +155,15 @@ router.put('/:id', authMiddleware, async (req, res) => {
     return res.status(403).json({ success: false, error: '无权编辑' });
   }
 
+  const updateData = { content: content.trim(), is_edited: true };
+  if (media_urls !== undefined) {
+    updateData.media_urls = media_urls;
+    updateData.media_type = media_urls.length > 0 ? 'image' : 'none';
+  }
+
   const { data: updated, error } = await supabase
     .from('posts')
-    .update({ content: content.trim(), is_edited: true })
+    .update(updateData)
     .eq('id', id)
     .select()
     .single();

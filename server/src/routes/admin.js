@@ -164,6 +164,17 @@ router.put('/reports/:id', async (req, res) => {
     return res.status(400).json({ success: false, error: '无效操作，需为 resolve 或 dismiss' });
   }
 
+  // 先查举报详情
+  const { data: report } = await supabase
+    .from('reports')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (!report) {
+    return res.status(404).json({ success: false, error: '举报不存在' });
+  }
+
   const newStatus = action === 'resolve' ? 'resolved' : 'dismissed';
 
   const { data, error } = await supabase
@@ -175,6 +186,17 @@ router.put('/reports/:id', async (req, res) => {
 
   if (error) {
     return res.status(500).json({ success: false, error: '处理失败' });
+  }
+
+  // resolve 时执行对应操作
+  if (action === 'resolve') {
+    if (report.target_type === 'user') {
+      // 封禁被举报用户
+      await supabase.from('users').update({ status: 'banned' }).eq('id', report.target_id);
+    } else if (report.target_type === 'post') {
+      // 删除被举报帖子
+      await supabase.from('posts').delete().eq('id', report.target_id);
+    }
   }
 
   res.json({ success: true, data });
