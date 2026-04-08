@@ -19,14 +19,27 @@
       <text>{{ post.content }}</text>
     </view>
 
-    <!-- 图片展示 -->
-    <view v-if="images.length > 0" class="image-grid" :class="'grid-' + Math.min(images.length, 3)">
+    <!-- 媒体展示 -->
+    <view v-if="videoUrls.length > 0" class="video-wrap">
+      <video
+        v-for="(url, idx) in videoUrls"
+        :key="'v'+idx"
+        class="post-video"
+        :src="url"
+        controls
+        :show-fullscreen-btn="true"
+        object-fit="contain"
+        @click.stop
+      />
+    </view>
+    <view v-if="imageUrls.length > 0" class="image-grid" :class="'grid-' + Math.min(imageUrls.length, 3)">
       <image
-        v-for="(url, idx) in images"
-        :key="idx"
+        v-for="(url, idx) in imageUrls"
+        :key="'i'+idx"
         class="post-img"
         :src="url"
         mode="aspectFill"
+        lazy-load
         @click.stop="previewImage(idx)"
       />
     </view>
@@ -65,12 +78,21 @@ const props = defineProps({
 const emit = defineEmits(['refresh', 'share']);
 
 const canInteract = computed(() => props.post.is_friend || props.post.is_self);
-const images = computed(() => {
+const allMedia = computed(() => {
   const urls = props.post.media_urls;
   if (!urls) return [];
   if (Array.isArray(urls)) return urls;
   try { return JSON.parse(urls); } catch { return []; }
 });
+
+function isVideo(url) {
+  return /\.(mp4|webm|mov)(\?|$)/i.test(url) || url.includes('/post-videos/');
+}
+
+const imageUrls = computed(() => allMedia.value.filter(u => !isVideo(u)));
+const videoUrls = computed(() => allMedia.value.filter(u => isVideo(u)));
+// 保持 images 兼容（转发等场景用）
+const images = allMedia;
 
 function formatTime(ts) {
   if (!ts) return '';
@@ -144,7 +166,7 @@ function reportPost() {
 }
 
 function previewImage(idx) {
-  uni.previewImage({ urls: images.value, current: idx });
+  uni.previewImage({ urls: imageUrls.value, current: idx });
 }
 
 function goDetail() {
@@ -175,6 +197,8 @@ function handleShare() {
 .grid-1 .post-img { width: 100%; max-height: 500rpx; }
 .grid-2 .post-img { width: calc(50% - 4rpx); height: 300rpx; }
 .grid-3 .post-img { width: calc(33.33% - 6rpx); height: 220rpx; }
+.video-wrap { margin-bottom: 20rpx; }
+.post-video { width: 100%; border-radius: 8rpx; }
 .post-actions { display: flex; border-top: 1rpx solid #f0f0f0; padding-top: 16rpx; }
 .action { flex: 1; text-align: center; font-size: 26rpx; color: #666; }
 .action.active { color: #e74c3c; }

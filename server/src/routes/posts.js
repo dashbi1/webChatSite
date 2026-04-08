@@ -4,6 +4,19 @@ const { authMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
 
+function isVideoUrl(url) {
+  return /\.(mp4|webm|mov)(\?|$)/i.test(url) || url.includes('/post-videos/');
+}
+
+function getMediaType(urls) {
+  if (!urls || urls.length === 0) return 'none';
+  const hasImage = urls.some(u => !isVideoUrl(u));
+  const hasVideo = urls.some(u => isVideoUrl(u));
+  if (hasImage && hasVideo) return 'mixed';
+  if (hasVideo) return 'video';
+  return 'image';
+}
+
 // 获取单条帖子详情
 router.get('/detail/:id', authMiddleware, async (req, res) => {
   const { id } = req.params;
@@ -115,10 +128,10 @@ router.post('/', authMiddleware, async (req, res) => {
     return res.status(400).json({ success: false, error: '内容不能超过1000字' });
   }
   if (media_urls.length > 9) {
-    return res.status(400).json({ success: false, error: '图片最多9张' });
+    return res.status(400).json({ success: false, error: '附件最多9个' });
   }
 
-  const mediaType = media_urls.length > 0 ? 'image' : 'none';
+  const mediaType = getMediaType(media_urls);
 
   const { data: inserted, error } = await supabase
     .from('posts')

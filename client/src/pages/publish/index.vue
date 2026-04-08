@@ -14,9 +14,21 @@
         <image class="picked-img" :src="img.tempPath" mode="aspectFill" />
         <text class="img-remove" @click="removeImage(idx)">✕</text>
       </view>
-      <view v-if="images.length < 9" class="img-add" @click="chooseImages">
+      <view v-if="totalMedia < 9" class="img-add" @click="chooseImages">
         <text class="add-icon">+</text>
-        <text class="add-text">{{ images.length }}/9</text>
+        <text class="add-text">图片</text>
+      </view>
+      <view v-if="totalMedia < 9" class="img-add" @click="chooseVideo">
+        <text class="add-icon">▶</text>
+        <text class="add-text">视频</text>
+      </view>
+    </view>
+
+    <!-- 视频预览 -->
+    <view v-if="videos.length > 0" class="video-preview">
+      <view v-for="(v, idx) in videos" :key="idx" class="video-item">
+        <video :src="v.tempPath" class="preview-video" controls />
+        <text class="vid-remove" @click="removeVideo(idx)">✕</text>
       </view>
     </view>
 
@@ -35,6 +47,7 @@ import { createPost, editPost } from '../../api/post';
 
 const content = ref('');
 const images = ref([]);
+const videos = ref([]);
 const loading = ref(false);
 const uploadProgress = ref('');
 const isEdit = ref(false);
@@ -58,8 +71,30 @@ onMounted(() => {
   }
 });
 
+import { computed } from 'vue';
+
+const totalMedia = computed(() => images.value.length + videos.value.length);
+
+function chooseVideo() {
+  uni.chooseVideo({
+    sourceType: ['album', 'camera'],
+    maxDuration: 60,
+    success: (res) => {
+      if (res.size > 20 * 1024 * 1024) {
+        uni.showToast({ title: '视频不能超过20MB', icon: 'none' });
+        return;
+      }
+      videos.value.push({ tempPath: res.tempFilePath, uploaded: false, url: '' });
+    },
+  });
+}
+
+function removeVideo(idx) {
+  videos.value.splice(idx, 1);
+}
+
 function chooseImages() {
-  const remaining = 9 - images.value.length;
+  const remaining = 9 - totalMedia.value;
   uni.chooseImage({
     count: remaining,
     sizeType: ['compressed'],
@@ -104,22 +139,44 @@ async function uploadImages() {
   return urls;
 }
 
+async function uploadAllMedia() {
+  const imgUrls = images.value.length > 0 ? await uploadImages() : [];
+  const vidUrls = [];
+  for (let i = 0; i < videos.value.length; i++) {
+    const v = videos.value[i];
+    if (v.uploaded && v.url) { vidUrls.push(v.url); continue; }
+    uploadProgress.value = `上传视频 ${i + 1}/${videos.value.length}...`;
+    const url = await new Promise((resolve, reject) => {
+      uni.uploadFile({
+        url: 'http://localhost:3000/api/upload/post-video',
+        filePath: v.tempPath,
+        name: 'file',
+        header: { Authorization: `Bearer ${uni.getStorageSync('token')}` },
+        success: (r) => {
+          const data = JSON.parse(r.data);
+          if (data.success) resolve(data.data.url);
+          else reject(new Error(data.error));
+        },
+        fail: reject,
+      });
+    });
+    v.uploaded = true;
+    v.url = url;
+    vidUrls.push(url);
+  }
+  return [...imgUrls, ...vidUrls];
+}
+
 async function handlePublish() {
   if (!content.value.trim()) return;
   loading.value = true;
   try {
     if (isEdit.value) {
-      // 编辑模式：上传新图片 + 保留已有图片
-      let mediaUrls;
-      if (images.value.length > 0) {
-        mediaUrls = await uploadImages();
-      } else {
-        mediaUrls = [];
-      }
+      const mediaUrls = await uploadAllMedia();
       await editPost(editId.value, content.value, mediaUrls);
       uni.showToast({ title: '修改成功', icon: 'success' });
     } else {
-      const mediaUrls = images.value.length > 0 ? await uploadImages() : [];
+      const mediaUrls = await uploadAllMedia();
       await createPost(content.value, mediaUrls);
       uni.showToast({ title: '发布成功', icon: 'success' });
     }
@@ -146,4 +203,8 @@ async function handlePublish() {
 .char-count { text-align: right; font-size: 24rpx; color: #999; margin: 16rpx 0; }
 .btn-publish { background: #4A90D9; color: #fff; border: none; border-radius: 12rpx; padding: 24rpx; font-size: 32rpx; }
 .btn-publish[disabled] { opacity: 0.5; }
+.video-preview { margin: 16rpx 0; }
+.video-item { position: relative; margin-bottom: 12rpx; }
+.preview-video { width: 100%; border-radius: 8rpx; }
+.vid-remove { position: absolute; top: 10rpx; right: 10rpx; width: 48rpx; height: 48rpx; background: rgba(0,0,0,0.6); color: #fff; font-size: 28rpx; text-align: center; line-height: 48rpx; border-radius: 50%; }
 </style>

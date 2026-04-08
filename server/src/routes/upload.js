@@ -82,4 +82,33 @@ router.post('/post-image', authMiddleware, upload.single('file'), async (req, re
   res.json({ success: true, data: { url: imageUrl } });
 });
 
+// 上传帖子视频（单个，最大 20MB）
+const videoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+
+router.post('/post-video', authMiddleware, videoUpload.single('file'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ success: false, error: '未选择文件' });
+  }
+
+  if (!req.file.mimetype.startsWith('video/')) {
+    return res.status(400).json({ success: false, error: '仅支持视频文件' });
+  }
+
+  const userId = req.user.id;
+  const filePath = `${userId}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.mp4`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('post-videos')
+    .upload(filePath, req.file.buffer, {
+      contentType: req.file.mimetype,
+    });
+
+  if (uploadError) {
+    return res.status(500).json({ success: false, error: '视频上传失败' });
+  }
+
+  const videoUrl = publicUrl('post-videos', filePath);
+  res.json({ success: true, data: { url: videoUrl } });
+});
+
 module.exports = router;

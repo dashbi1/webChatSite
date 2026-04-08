@@ -28,7 +28,10 @@
         @refresh="loadPosts"
         @share="onShare"
       />
-      <view v-if="posts.length === 0 && !loading" class="empty">
+      <template v-if="showSkeleton && posts.length === 0">
+        <SkeletonPost v-for="i in 3" :key="'sk'+i" />
+      </template>
+      <view v-if="posts.length === 0 && !loading && !showSkeleton" class="empty">
         <text>还没有人发帖，成为第一个吧！</text>
       </view>
       <view v-if="loading" class="loading-tip">
@@ -57,6 +60,7 @@ import { onShow } from '@dcloudio/uni-app';
 import { getPosts } from '../../api/post';
 import NotificationBell from '../../components/NotificationBell.vue';
 import PostCard from '../../components/PostCard.vue';
+import SkeletonPost from '../../components/SkeletonPost.vue';
 import FriendPicker from '../../components/FriendPicker.vue';
 import { getSocket } from '../../utils/socket';
 
@@ -66,10 +70,22 @@ const loading = ref(false);
 const refreshing = ref(false);
 const noMore = ref(false);
 const sortMode = ref('latest');
+const showSkeleton = ref(true);
+let lastLoadTime = 0;
 
 onShow(() => {
   checkLogin();
-  loadPosts();
+  // 先展示缓存
+  const cached = uni.getStorageSync(`cache_posts_${sortMode.value}`);
+  if (cached) {
+    try { posts.value = JSON.parse(cached); } catch {}
+  }
+  // 3 秒内不重复请求
+  if (Date.now() - lastLoadTime > 3000) {
+    loadPosts();
+  } else {
+    showSkeleton.value = false;
+  }
 });
 
 function checkLogin() {
@@ -89,14 +105,19 @@ async function loadPosts() {
   page.value = 1;
   noMore.value = false;
   loading.value = true;
+  if (posts.value.length === 0) showSkeleton.value = true;
   try {
     const res = await getPosts(1, 20, sortMode.value);
     posts.value = res.data;
     if (res.data.length < 20) noMore.value = true;
+    // 缓存
+    uni.setStorageSync(`cache_posts_${sortMode.value}`, JSON.stringify(res.data));
+    lastLoadTime = Date.now();
   } catch {
   } finally {
     loading.value = false;
     refreshing.value = false;
+    showSkeleton.value = false;
   }
 }
 
