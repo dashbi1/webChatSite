@@ -14,7 +14,8 @@
           :src="msg.sender?.avatar_url || '/static/default-avatar.png'"
         />
         <view class="msg-bubble">
-          <text>{{ msg.content }}</text>
+          <ShareCard v-if="msg.message_type === 'post_share' && msg.reference_post_id" :postId="msg.reference_post_id" />
+          <text v-else>{{ msg.content }}</text>
         </view>
         <image
           v-if="msg.sender_id === myId"
@@ -38,6 +39,7 @@
 import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 import { getMessages } from '../../api/chat';
 import { getSocket } from '../../utils/socket';
+import ShareCard from '../../components/ShareCard.vue';
 
 const messages = ref([]);
 const inputText = ref('');

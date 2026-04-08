@@ -1,7 +1,9 @@
 import { get, post, put, del } from './request';
 
-export const getPosts = (page = 1, limit = 20) =>
-  get(`/posts?page=${page}&limit=${limit}`);
+export const getPosts = (page = 1, limit = 20, sort = 'latest') =>
+  get(`/posts?page=${page}&limit=${limit}&sort=${sort}`);
+
+export const getPostDetail = (id) => get(`/posts/detail/${id}`);
 
 export const createPost = (content, media_urls = []) =>
   post('/posts', { content, media_urls });

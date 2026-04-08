@@ -4,18 +4,54 @@ const { authMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
 
+// 获取单条帖子详情
+router.get('/detail/:id', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+
+  const { data: post, error } = await supabase
+    .from('posts')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error || !post) {
+    return res.status(404).json({ success: false, error: '帖子不存在' });
+  }
+
+  const { data: author } = await supabase
+    .from('users')
+    .select('id, nickname, avatar_url, college')
+    .eq('id', post.author_id)
+    .single();
+
+  res.json({
+    success: true,
+    data: { ...post, author, is_self: post.author_id === userId },
+  });
+});
+
 // 获取信息流
 router.get('/', authMiddleware, async (req, res) => {
-  const { page = 1, limit = 20 } = req.query;
+  const { page = 1, limit = 20, sort = 'latest' } = req.query;
   const offset = (page - 1) * limit;
   const userId = req.user.id;
 
   // 获取帖子
-  const { data: posts, error } = await supabase
-    .from('posts')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .range(offset, offset + limit - 1);
+  let posts, error;
+  if (sort === 'hot') {
+    const result = await supabase.rpc('get_hot_posts', { p_offset: Number(offset), p_limit: Number(limit) });
+    posts = result.data;
+    error = result.error;
+  } else {
+    const result = await supabase
+      .from('posts')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+    posts = result.data;
+    error = result.error;
+  }
 
   if (error) {
     return res.status(500).json({ success: false, error: '获取帖子失败' });

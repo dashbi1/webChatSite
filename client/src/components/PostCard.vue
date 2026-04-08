@@ -62,7 +62,7 @@ const props = defineProps({
   post: { type: Object, required: true },
 });
 
-const emit = defineEmits(['refresh']);
+const emit = defineEmits(['refresh', 'share']);
 
 const canInteract = computed(() => props.post.is_friend || props.post.is_self);
 const images = computed(() => {
@@ -156,7 +156,7 @@ function goProfile() {
 }
 
 function handleShare() {
-  uni.showToast({ title: '转发功能开发中', icon: 'none' });
+  emit('share', props.post);
 }
 </script>
 
