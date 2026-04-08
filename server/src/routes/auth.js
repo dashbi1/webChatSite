@@ -78,16 +78,19 @@ router.post('/register', async (req, res) => {
 // 登录
 router.post('/login', async (req, res) => {
   const { phone, password } = req.body;
+  console.log('[login] start:', phone);
 
   if (!phone || !password) {
     return res.status(400).json({ success: false, error: '缺少必填字段' });
   }
 
+  console.log('[login] querying supabase...');
   const { data: user, error } = await supabase
     .from('users')
     .select('*')
     .eq('phone', phone)
     .single();
+  console.log('[login] supabase done, user:', !!user, 'error:', !!error);
 
   if (error || !user) {
     return res.status(400).json({ success: false, error: '手机号或密码不正确' });

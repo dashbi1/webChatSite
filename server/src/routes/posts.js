@@ -10,13 +10,10 @@ router.get('/', authMiddleware, async (req, res) => {
   const offset = (page - 1) * limit;
   const userId = req.user.id;
 
-  // 获取帖子 + 作者信息
+  // 获取帖子
   const { data: posts, error } = await supabase
     .from('posts')
-    .select(`
-      *,
-      author:users!author_id (id, nickname, avatar_url, college)
-    `)
+    .select('*')
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
 
@@ -49,9 +46,19 @@ router.get('/', authMiddleware, async (req, res) => {
 
   const likedPostIds = new Set((userLikes || []).map(l => l.post_id));
 
+  // 批量获取作者信息
+  const authorIds = [...new Set(posts.map(p => p.author_id))];
+  const { data: authors } = await supabase
+    .from('users')
+    .select('id, nickname, avatar_url, college')
+    .in('id', authorIds);
+
+  const authorMap = new Map((authors || []).map(a => [a.id, a]));
+
   // 组装返回数据
   const result = posts.map(post => ({
     ...post,
+    author: authorMap.get(post.author_id) || null,
     is_liked: likedPostIds.has(post.id),
     is_friend: friendIds.has(post.author_id),
     is_self: post.author_id === userId,
@@ -72,22 +79,27 @@ router.post('/', authMiddleware, async (req, res) => {
     return res.status(400).json({ success: false, error: '内容不能超过1000字' });
   }
 
-  const { data: post, error } = await supabase
+  const { data: inserted, error } = await supabase
     .from('posts')
     .insert({ author_id: userId, content: content.trim() })
-    .select(`
-      *,
-      author:users!author_id (id, nickname, avatar_url, college)
-    `)
+    .select('*')
     .single();
 
   if (error) {
+    console.error('Insert post error:', error);
     return res.status(500).json({ success: false, error: '发布失败' });
   }
 
+  // 单独查作者信息
+  const { data: author } = await supabase
+    .from('users')
+    .select('id, nickname, avatar_url, college')
+    .eq('id', userId)
+    .single();
+
   res.json({
     success: true,
-    data: { ...post, is_liked: false, is_friend: false, is_self: true },
+    data: { ...inserted, author, is_liked: false, is_friend: false, is_self: true },
   });
 });
 
@@ -208,10 +220,7 @@ router.get('/:id/comments', authMiddleware, async (req, res) => {
 
   const { data: comments, error } = await supabase
     .from('comments')
-    .select(`
-      *,
-      user:users!user_id (id, nickname, avatar_url)
-    `)
+    .select('*')
     .eq('post_id', postId)
     .order('created_at', { ascending: true })
     .range(offset, offset + limit - 1);
@@ -220,7 +229,17 @@ router.get('/:id/comments', authMiddleware, async (req, res) => {
     return res.status(500).json({ success: false, error: '获取评论失败' });
   }
 
-  res.json({ success: true, data: comments });
+  // 获取评论者信息
+  const commentUserIds = [...new Set(comments.map(c => c.user_id))];
+  const { data: commentUsers } = await supabase
+    .from('users')
+    .select('id, nickname, avatar_url')
+    .in('id', commentUserIds.length > 0 ? commentUserIds : ['none']);
+
+  const userMap = new Map((commentUsers || []).map(u => [u.id, u]));
+  const enriched = comments.map(c => ({ ...c, user: userMap.get(c.user_id) || null }));
+
+  res.json({ success: true, data: enriched });
 });
 
 // 发表评论
@@ -263,15 +282,20 @@ router.post('/:id/comments', authMiddleware, async (req, res) => {
   const { data: comment, error } = await supabase
     .from('comments')
     .insert({ user_id: userId, post_id: postId, content: content.trim() })
-    .select(`
-      *,
-      user:users!user_id (id, nickname, avatar_url)
-    `)
+    .select('*')
     .single();
 
   if (error) {
     return res.status(500).json({ success: false, error: '评论失败' });
   }
+
+  // 附加用户信息
+  const { data: commentUser } = await supabase
+    .from('users')
+    .select('id, nickname, avatar_url')
+    .eq('id', userId)
+    .single();
+  comment.user = commentUser;
 
   // 更新帖子评论计数
   await supabase.rpc('increment_comment_count', { post_id_input: postId });

@@ -40,11 +40,17 @@ function setupSocket(io) {
           message_type: messageType,
           reference_post_id: referencePostId || null,
         })
-        .select(`
-          *,
-          sender:users!sender_id (id, nickname, avatar_url)
-        `)
+        .select('*')
         .single();
+
+      if (!error && message) {
+        const { data: senderUser } = await supabase
+          .from('users')
+          .select('id, nickname, avatar_url')
+          .eq('id', userId)
+          .single();
+        message.sender = senderUser;
+      }
 
       if (error) {
         socket.emit('chat:error', { error: '发送失败' });

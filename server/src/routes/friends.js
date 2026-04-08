@@ -64,10 +64,7 @@ router.get('/requests', authMiddleware, async (req, res) => {
 
   const { data: requests, error } = await supabase
     .from('friendships')
-    .select(`
-      *,
-      requester:users!requester_id (id, nickname, avatar_url, college)
-    `)
+    .select('*')
     .eq('addressee_id', userId)
     .eq('status', 'pending')
     .order('created_at', { ascending: false });
@@ -76,7 +73,17 @@ router.get('/requests', authMiddleware, async (req, res) => {
     return res.status(500).json({ success: false, error: '获取申请列表失败' });
   }
 
-  res.json({ success: true, data: requests });
+  // 获取申请人信息
+  const requesterIds = requests.map(r => r.requester_id);
+  const { data: requesters } = await supabase
+    .from('users')
+    .select('id, nickname, avatar_url, college')
+    .in('id', requesterIds.length > 0 ? requesterIds : ['none']);
+
+  const requesterMap = new Map((requesters || []).map(u => [u.id, u]));
+  const enriched = requests.map(r => ({ ...r, requester: requesterMap.get(r.requester_id) || null }));
+
+  res.json({ success: true, data: enriched });
 });
 
 // 处理好友申请
@@ -122,11 +129,7 @@ router.get('/', authMiddleware, async (req, res) => {
 
   const { data: friendships, error } = await supabase
     .from('friendships')
-    .select(`
-      id,
-      requester:users!requester_id (id, nickname, avatar_url, college, grade),
-      addressee:users!addressee_id (id, nickname, avatar_url, college, grade)
-    `)
+    .select('id, requester_id, addressee_id')
     .eq('status', 'accepted')
     .or(`requester_id.eq.${userId},addressee_id.eq.${userId}`);
 
@@ -134,9 +137,19 @@ router.get('/', authMiddleware, async (req, res) => {
     return res.status(500).json({ success: false, error: '获取好友列表失败' });
   }
 
+  // 获取好友用户信息
+  const friendUserIds = friendships.map(f =>
+    f.requester_id === userId ? f.addressee_id : f.requester_id
+  );
+  const { data: friendUsers } = await supabase
+    .from('users')
+    .select('id, nickname, avatar_url, college, grade')
+    .in('id', friendUserIds.length > 0 ? friendUserIds : ['none']);
+
+  const friendMap = new Map((friendUsers || []).map(u => [u.id, u]));
   const friends = friendships.map(f => {
-    const friend = f.requester.id === userId ? f.addressee : f.requester;
-    return { friendship_id: f.id, ...friend };
+    const fid = f.requester_id === userId ? f.addressee_id : f.requester_id;
+    return { friendship_id: f.id, ...(friendMap.get(fid) || {}) };
   });
 
   res.json({ success: true, data: friends });

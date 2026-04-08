@@ -17,24 +17,30 @@ router.get('/conversations', authMiddleware, async (req, res) => {
     // 如果 RPC 不存在，退回到简单查询
     const { data: messages } = await supabase
       .from('messages')
-      .select(`
-        *,
-        sender:users!sender_id (id, nickname, avatar_url),
-        receiver:users!receiver_id (id, nickname, avatar_url)
-      `)
+      .select('*')
       .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
       .order('created_at', { ascending: false })
       .limit(50);
+
+    // 收集对话对象 ID
+    const otherIds = new Set();
+    for (const msg of messages || []) {
+      otherIds.add(msg.sender_id === userId ? msg.receiver_id : msg.sender_id);
+    }
+    const { data: otherUsers } = await supabase
+      .from('users')
+      .select('id, nickname, avatar_url')
+      .in('id', otherIds.size > 0 ? [...otherIds] : ['none']);
+    const userMap = new Map((otherUsers || []).map(u => [u.id, u]));
 
     // 按对话对象分组，取最新一条
     const convMap = new Map();
     for (const msg of messages || []) {
       const otherId = msg.sender_id === userId ? msg.receiver_id : msg.sender_id;
       if (!convMap.has(otherId)) {
-        const other = msg.sender_id === userId ? msg.receiver : msg.sender;
         convMap.set(otherId, {
           friend_id: otherId,
-          friend: other,
+          friend: userMap.get(otherId) || null,
           last_message: msg.content,
           last_time: msg.created_at,
           unread_count: 0,
@@ -57,10 +63,7 @@ router.get('/:friendId', authMiddleware, async (req, res) => {
 
   const { data: messages, error } = await supabase
     .from('messages')
-    .select(`
-      *,
-      sender:users!sender_id (id, nickname, avatar_url)
-    `)
+    .select('*')
     .or(
       `and(sender_id.eq.${userId},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${userId})`
     )
@@ -79,7 +82,16 @@ router.get('/:friendId', authMiddleware, async (req, res) => {
     .eq('receiver_id', userId)
     .eq('is_read', false);
 
-  res.json({ success: true, data: messages.reverse() });
+  // 附加发送者信息
+  const senderIds = [...new Set(messages.map(m => m.sender_id))];
+  const { data: senders } = await supabase
+    .from('users')
+    .select('id, nickname, avatar_url')
+    .in('id', senderIds.length > 0 ? senderIds : ['none']);
+  const senderMap = new Map((senders || []).map(u => [u.id, u]));
+  const enriched = messages.map(m => ({ ...m, sender: senderMap.get(m.sender_id) || null }));
+
+  res.json({ success: true, data: enriched.reverse() });
 });
 
 module.exports = router;
