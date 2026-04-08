@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>工大圈子 - 管理后台</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; }
+    .login-page { display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+    .login-box { background: #fff; padding: 40px; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); width: 360px; }
+    .login-box h2 { text-align: center; margin-bottom: 24px; color: #333; }
+    .login-box input { width: 100%; padding: 10px 12px; margin-bottom: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+    .login-box button { width: 100%; padding: 10px; background: #4A90D9; color: #fff; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; }
+    .login-box button:hover { background: #3a7bc8; }
+    .login-box .error { color: #e74c3c; font-size: 13px; margin-bottom: 8px; }
+
+    .admin-layout { display: flex; min-height: 100vh; }
+    .sidebar { width: 200px; background: #001529; color: #fff; padding: 20px 0; }
+    .sidebar h3 { padding: 0 20px 20px; border-bottom: 1px solid #1a3048; font-size: 16px; }
+    .sidebar .nav-item { padding: 12px 20px; cursor: pointer; font-size: 14px; color: #aaa; }
+    .sidebar .nav-item:hover, .sidebar .nav-item.active { background: #1890ff; color: #fff; }
+    .main { flex: 1; padding: 24px; }
+    .main h2 { margin-bottom: 16px; color: #333; }
+    .toolbar { display: flex; gap: 12px; margin-bottom: 16px; align-items: center; }
+    .toolbar input { padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; width: 260px; }
+    .toolbar select { padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+    table { width: 100%; background: #fff; border-collapse: collapse; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+    th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+    th { background: #fafafa; font-weight: 600; color: #666; }
+    .btn { padding: 4px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; color: #fff; }
+    .btn-danger { background: #e74c3c; }
+    .btn-success { background: #27ae60; }
+    .btn-warn { background: #f39c12; }
+    .btn-info { background: #3498db; }
+    .btn:hover { opacity: 0.85; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; color: #fff; }
+    .badge-active { background: #27ae60; }
+    .badge-banned { background: #e74c3c; }
+    .badge-pending { background: #f39c12; }
+    .badge-resolved { background: #95a5a6; }
+    .badge-dismissed { background: #bdc3c7; }
+    .avatar-small { width: 32px; height: 32px; border-radius: 50%; vertical-align: middle; margin-right: 8px; background: #eee; }
+    .pagination { margin-top: 16px; display: flex; gap: 8px; justify-content: center; }
+    .pagination button { padding: 6px 14px; border: 1px solid #ddd; background: #fff; border-radius: 4px; cursor: pointer; }
+    .pagination button.active { background: #4A90D9; color: #fff; border-color: #4A90D9; }
+    .pagination button:disabled { opacity: 0.4; cursor: default; }
+    .logout { position: fixed; top: 16px; right: 24px; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <!-- 登录 -->
+  <div v-if="!token" class="login-page">
+    <div class="login-box">
+      <h2>管理后台</h2>
+      <p v-if="loginError" class="error">{{ loginError }}</p>
+      <input v-model="loginPhone" placeholder="管理员手机号" @keyup.enter="login" />
+      <input v-model="loginPass" type="password" placeholder="密码" @keyup.enter="login" />
+      <button @click="login">登录</button>
+    </div>
+  </div>
+
+  <!-- 后台主体 -->
+  <div v-else class="admin-layout">
+    <div class="sidebar">
+      <h3>管理后台</h3>
+      <div class="nav-item" :class="{active: tab==='users'}" @click="tab='users'; loadUsers()">用户管理</div>
+      <div class="nav-item" :class="{active: tab==='posts'}" @click="tab='posts'; loadPosts()">帖子管理</div>
+      <div class="nav-item" :class="{active: tab==='reports'}" @click="tab='reports'; loadReports()">举报处理</div>
+    </div>
+
+    <div class="main">
+      <button class="btn btn-info logout" @click="logout">退出登录</button>
+
+      <!-- 用户管理 -->
+      <div v-if="tab==='users'">
+        <h2>用户管理</h2>
+        <div class="toolbar">
+          <input v-model="userQuery" placeholder="搜索手机号/昵称" @keyup.enter="loadUsers()" />
+          <button class="btn btn-info" @click="loadUsers()">搜索</button>
+        </div>
+        <table>
+          <thead><tr><th>头像</th><th>昵称</th><th>手机号</th><th>学院</th><th>角色</th><th>状态</th><th>注册时间</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr v-for="u in users" :key="u.id">
+              <td><img class="avatar-small" :src="u.avatar_url || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%23eee%22 width=%221%22 height=%221%22/></svg>'" /></td>
+              <td>{{ u.nickname || '-' }}</td>
+              <td>{{ u.phone }}</td>
+              <td>{{ u.college || '-' }}</td>
+              <td>{{ u.role }}</td>
+              <td><span class="badge" :class="'badge-'+u.status">{{ u.status }}</span></td>
+              <td>{{ fmtDate(u.created_at) }}</td>
+              <td>
+                <button v-if="u.status==='active' && u.role!=='admin'" class="btn btn-danger" @click="banUser(u)">封禁</button>
+                <button v-if="u.status==='banned'" class="btn btn-success" @click="unbanUser(u)">解封</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="pagination">
+          <button :disabled="userPage<=1" @click="userPage--;loadUsers()">上一页</button>
+          <button class="active">{{ userPage }}</button>
+          <button :disabled="users.length<20" @click="userPage++;loadUsers()">下一页</button>
+        </div>
+      </div>
+
+      <!-- 帖子管理 -->
+      <div v-if="tab==='posts'">
+        <h2>帖子管理</h2>
+        <div class="toolbar">
+          <input v-model="postQuery" placeholder="搜索内容关键词" @keyup.enter="loadPosts()" />
+          <button class="btn btn-info" @click="loadPosts()">搜索</button>
+        </div>
+        <table>
+          <thead><tr><th>作者</th><th>内容</th><th>图片</th><th>赞</th><th>评论</th><th>时间</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr v-for="p in posts" :key="p.id">
+              <td>{{ p.author?.nickname || p.author?.phone || '-' }}</td>
+              <td>{{ (p.content||'').slice(0,40) }}{{ p.content?.length>40?'...':'' }}</td>
+              <td>{{ (p.media_urls||[]).length }}</td>
+              <td>{{ p.like_count }}</td>
+              <td>{{ p.comment_count }}</td>
+              <td>{{ fmtDate(p.created_at) }}</td>
+              <td><button class="btn btn-danger" @click="deletePost(p)">删除</button></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="pagination">
+          <button :disabled="postPage<=1" @click="postPage--;loadPosts()">上一页</button>
+          <button class="active">{{ postPage }}</button>
+          <button :disabled="posts.length<20" @click="postPage++;loadPosts()">下一页</button>
+        </div>
+      </div>
+
+      <!-- 举报处理 -->
+      <div v-if="tab==='reports'">
+        <h2>举报处理</h2>
+        <div class="toolbar">
+          <select v-model="reportStatus" @change="reportPage=1;loadReports()">
+            <option value="">全部</option>
+            <option value="pending">待处理</option>
+            <option value="resolved">已处理</option>
+            <option value="dismissed">已驳回</option>
+          </select>
+        </div>
+        <table>
+          <thead><tr><th>举报者</th><th>类型</th><th>目标 ID</th><th>原因</th><th>状态</th><th>时间</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr v-for="r in reports" :key="r.id">
+              <td>{{ r.reporter?.nickname || r.reporter?.phone || '-' }}</td>
+              <td>{{ r.target_type==='post'?'帖子':'用户' }}</td>
+              <td style="font-size:11px;">{{ r.target_id?.slice(0,8) }}...</td>
+              <td>{{ r.reason }}</td>
+              <td><span class="badge" :class="'badge-'+r.status">{{ r.status }}</span></td>
+              <td>{{ fmtDate(r.created_at) }}</td>
+              <td>
+                <template v-if="r.status==='pending'">
+                  <button class="btn btn-success" @click="handleReport(r,'resolve')">处理</button>
+                  <button class="btn btn-warn" @click="handleReport(r,'dismiss')">驳回</button>
+                </template>
+                <span v-else style="color:#999;">已处理</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="pagination">
+          <button :disabled="reportPage<=1" @click="reportPage--;loadReports()">上一页</button>
+          <button class="active">{{ reportPage }}</button>
+          <button :disabled="reports.length<20" @click="reportPage++;loadReports()">下一页</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const BASE = window.location.origin + '/api';
+
+const { createApp, ref, onMounted } = Vue;
+
+createApp({
+  setup() {
+    const token = ref(localStorage.getItem('admin_token') || '');
+    const tab = ref('users');
+    const loginPhone = ref('');
+    const loginPass = ref('');
+    const loginError = ref('');
+
+    const users = ref([]);
+    const userPage = ref(1);
+    const userQuery = ref('');
+
+    const posts = ref([]);
+    const postPage = ref(1);
+    const postQuery = ref('');
+
+    const reports = ref([]);
+    const reportPage = ref(1);
+    const reportStatus = ref('pending');
+
+    function headers() {
+      return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token.value };
+    }
+
+    async function login() {
+      loginError.value = '';
+      try {
+        const res = await fetch(BASE + '/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: loginPhone.value, password: loginPass.value }),
+        });
+        const data = await res.json();
+        if (!data.success) { loginError.value = data.error; return; }
+        if (data.data.user.role !== 'admin') { loginError.value = '非管理员账号'; return; }
+        token.value = data.data.token;
+        localStorage.setItem('admin_token', token.value);
+        loadUsers();
+      } catch { loginError.value = '登录失败'; }
+    }
+
+    function logout() {
+      token.value = '';
+      localStorage.removeItem('admin_token');
+    }
+
+    async function loadUsers() {
+      const q = userQuery.value ? '&q=' + encodeURIComponent(userQuery.value) : '';
+      const res = await fetch(BASE + '/admin/users?page=' + userPage.value + q, { headers: headers() });
+      const data = await res.json();
+      users.value = data.data || [];
+    }
+
+    async function banUser(u) {
+      if (!confirm('确认封禁 ' + (u.nickname||u.phone) + '？')) return;
+      await fetch(BASE + '/admin/users/' + u.id + '/ban', { method: 'PUT', headers: headers() });
+      u.status = 'banned';
+    }
+
+    async function unbanUser(u) {
+      await fetch(BASE + '/admin/users/' + u.id + '/unban', { method: 'PUT', headers: headers() });
+      u.status = 'active';
+    }
+
+    async function loadPosts() {
+      const q = postQuery.value ? '&q=' + encodeURIComponent(postQuery.value) : '';
+      const res = await fetch(BASE + '/admin/posts?page=' + postPage.value + q, { headers: headers() });
+      const data = await res.json();
+      posts.value = data.data || [];
+    }
+
+    async function deletePost(p) {
+      if (!confirm('确认删除该帖子？')) return;
+      await fetch(BASE + '/admin/posts/' + p.id, { method: 'DELETE', headers: headers() });
+      posts.value = posts.value.filter(x => x.id !== p.id);
+    }
+
+    async function loadReports() {
+      const s = reportStatus.value ? '&status=' + reportStatus.value : '';
+      const res = await fetch(BASE + '/admin/reports?page=' + reportPage.value + s, { headers: headers() });
+      const data = await res.json();
+      reports.value = data.data || [];
+    }
+
+    async function handleReport(r, action) {
+      const label = action === 'resolve' ? '处理' : '驳回';
+      if (!confirm('确认' + label + '该举报？')) return;
+      await fetch(BASE + '/admin/reports/' + r.id, {
+        method: 'PUT', headers: headers(), body: JSON.stringify({ action }),
+      });
+      r.status = action === 'resolve' ? 'resolved' : 'dismissed';
+    }
+
+    function fmtDate(ts) {
+      if (!ts) return '';
+      const d = new Date(ts);
+      return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+    }
+
+    onMounted(() => { if (token.value) loadUsers(); });
+
+    return {
+      token, tab, loginPhone, loginPass, loginError, login, logout,
+      users, userPage, userQuery, loadUsers, banUser, unbanUser,
+      posts, postPage, postQuery, loadPosts, deletePost,
+      reports, reportPage, reportStatus, loadReports, handleReport,
+      fmtDate,
+    };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>

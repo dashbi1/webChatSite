@@ -15,6 +15,8 @@ const messageRoutes = require('./routes/messages');
 const notificationRoutes = require('./routes/notifications');
 const adminRoutes = require('./routes/admin');
 const uploadRoutes = require('./routes/upload');
+const reportRoutes = require('./routes/reports');
+const path = require('path');
 
 const app = express();
 
@@ -36,6 +38,11 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/reports', reportRoutes);
+
+// 管理后台静态文件
+const adminPath = process.env.ADMIN_PATH || 'console-k8m2x7';
+app.use(`/${adminPath}`, express.static(path.join(__dirname, '..', 'admin')));
 
 // 全局错误处理
 app.use((err, req, res, _next) => {

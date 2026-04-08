@@ -11,6 +11,7 @@
       <button v-if="user.friend_status === 'none'" class="btn-primary" @click="addFriend">添加好友</button>
       <button v-else-if="user.friend_status === 'pending'" class="btn-disabled" disabled>等待验证</button>
       <button v-else-if="user.friend_status === 'accepted'" class="btn-chat" @click="goChat">发消息</button>
+      <button class="btn-report" @click="reportUser">举报用户</button>
     </view>
   </view>
 </template>
@@ -19,6 +20,7 @@
 import { ref, onMounted } from 'vue';
 import { getUserProfile } from '../../api/user';
 import { sendFriendRequest } from '../../api/friend';
+import { submitReport } from '../../api/report';
 
 const user = ref(null);
 const userId = ref('');
@@ -44,6 +46,19 @@ async function addFriend() {
 function goChat() {
   uni.navigateTo({ url: `/pages/chat/index?friendId=${userId.value}&name=${user.value.nickname}` });
 }
+
+function reportUser() {
+  uni.showActionSheet({
+    itemList: ['内容违规', '垃圾广告', '人身攻击', '其他'],
+    success: async (res) => {
+      const reasons = ['内容违规', '垃圾广告', '人身攻击', '其他'];
+      try {
+        await submitReport({ target_type: 'user', target_id: userId.value, reason: reasons[res.tapIndex] });
+        uni.showToast({ title: '举报已提交', icon: 'success' });
+      } catch {}
+    },
+  });
+}
 </script>
 
 <style scoped>
@@ -56,4 +71,5 @@ function goChat() {
 .btn-primary { background: #4A90D9; color: #fff; border: none; border-radius: 12rpx; padding: 24rpx; font-size: 30rpx; }
 .btn-disabled { background: #e0e0e0; color: #999; border: none; border-radius: 12rpx; padding: 24rpx; font-size: 30rpx; }
 .btn-chat { background: #27ae60; color: #fff; border: none; border-radius: 12rpx; padding: 24rpx; font-size: 30rpx; }
+.btn-report { background: #fff; color: #e74c3c; border: 1rpx solid #e74c3c; border-radius: 12rpx; padding: 24rpx; font-size: 26rpx; margin-top: 20rpx; }
 </style>

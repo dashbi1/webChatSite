@@ -12,7 +12,7 @@
         <text class="time">{{ formatTime(post.created_at) }}</text>
       </view>
       <text v-if="post.is_edited" class="edited-tag">已编辑</text>
-      <text v-if="post.is_self" class="more-btn" @click.stop="showActions">···</text>
+      <text class="more-btn" @click.stop="showActions">···</text>
     </view>
 
     <view class="post-content">
@@ -56,6 +56,7 @@
 <script setup>
 import { computed } from 'vue';
 import { toggleLike, deletePost } from '../api/post';
+import { submitReport } from '../api/report';
 
 const props = defineProps({
   post: { type: Object, required: true },
@@ -94,28 +95,49 @@ async function handleLike() {
 }
 
 function showActions() {
+  const isSelf = props.post.is_self;
+  const items = isSelf ? ['编辑', '删除'] : ['举报'];
+
   uni.showActionSheet({
-    itemList: ['编辑', '删除'],
+    itemList: items,
     success: (res) => {
-      if (res.tapIndex === 0) {
-        uni.navigateTo({
-          url: `/pages/publish/index?id=${props.post.id}&content=${encodeURIComponent(props.post.content)}`,
-        });
-      } else if (res.tapIndex === 1) {
-        uni.showModal({
-          title: '确认删除',
-          content: '删除后不可恢复',
-          success: async (r) => {
-            if (r.confirm) {
-              try {
-                await deletePost(props.post.id);
-                uni.showToast({ title: '已删除', icon: 'success' });
-                emit('refresh');
-              } catch {}
-            }
-          },
-        });
+      if (isSelf) {
+        if (res.tapIndex === 0) {
+          uni.navigateTo({
+            url: `/pages/publish/index?id=${props.post.id}&content=${encodeURIComponent(props.post.content)}`,
+          });
+        } else if (res.tapIndex === 1) {
+          uni.showModal({
+            title: '确认删除',
+            content: '删除后不可恢复',
+            success: async (r) => {
+              if (r.confirm) {
+                try {
+                  await deletePost(props.post.id);
+                  uni.showToast({ title: '已删除', icon: 'success' });
+                  emit('refresh');
+                } catch {}
+              }
+            },
+          });
+        }
+      } else {
+        // 举报
+        reportPost();
       }
+    },
+  });
+}
+
+function reportPost() {
+  uni.showActionSheet({
+    itemList: ['内容违规', '垃圾广告', '人身攻击', '其他'],
+    success: async (res) => {
+      const reasons = ['内容违规', '垃圾广告', '人身攻击', '其他'];
+      try {
+        await submitReport({ target_type: 'post', target_id: props.post.id, reason: reasons[res.tapIndex] });
+        uni.showToast({ title: '举报已提交', icon: 'success' });
+      } catch {}
     },
   });
 }
