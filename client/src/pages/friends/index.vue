@@ -17,13 +17,14 @@
 
 <script setup>
 import { ref } from 'vue';
+import { onShow } from '@dcloudio/uni-app';
 import { getFriends } from '../../api/friend';
 
 const friends = ref([]);
 
-function onShow() {
+onShow(() => {
   loadFriends();
-}
+});
 
 async function loadFriends() {
   const res = await getFriends();
@@ -38,7 +39,6 @@ function goChat(f) {
   uni.navigateTo({ url: `/pages/chat/index?friendId=${f.id}&name=${f.nickname}` });
 }
 
-defineExpose({ onShow });
 </script>
 
 <style scoped>

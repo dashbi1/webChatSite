@@ -33,13 +33,14 @@
 
 <script setup>
 import { ref } from 'vue';
+import { onShow } from '@dcloudio/uni-app';
 import { getMe } from '../../api/user';
 
 const user = ref({});
 
-function onShow() {
+onShow(() => {
   loadUser();
-}
+});
 
 async function loadUser() {
   try {
@@ -70,7 +71,6 @@ function handleLogout() {
   });
 }
 
-defineExpose({ onShow });
 </script>
 
 <style scoped>

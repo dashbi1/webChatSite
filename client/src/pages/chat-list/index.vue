@@ -17,13 +17,14 @@
 
 <script setup>
 import { ref } from 'vue';
+import { onShow } from '@dcloudio/uni-app';
 import { getConversations } from '../../api/chat';
 
 const conversations = ref([]);
 
-function onShow() {
+onShow(() => {
   loadConversations();
-}
+});
 
 async function loadConversations() {
   const res = await getConversations();
@@ -45,7 +46,6 @@ function formatTime(ts) {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-defineExpose({ onShow });
 </script>
 
 <style scoped>

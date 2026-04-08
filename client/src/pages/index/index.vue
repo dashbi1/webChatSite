@@ -41,6 +41,7 @@
 
 <script setup>
 import { ref } from 'vue';
+import { onShow } from '@dcloudio/uni-app';
 import { getPosts } from '../../api/post';
 import PostCard from '../../components/PostCard.vue';
 
@@ -50,11 +51,10 @@ const loading = ref(false);
 const refreshing = ref(false);
 const noMore = ref(false);
 
-// uni-app 页面生命周期用 onShow 代替 onMounted（切回 tab 时刷新）
-function onShow() {
+onShow(() => {
   checkLogin();
   loadPosts();
-}
+});
 
 function checkLogin() {
   const token = uni.getStorageSync('token');
@@ -109,8 +109,6 @@ function goNotifications() {
   uni.navigateTo({ url: '/pages/notifications/index' });
 }
 
-// 暴露给 uni-app 生命周期
-defineExpose({ onShow });
 </script>
 
 <style scoped>
