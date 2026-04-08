@@ -5,6 +5,7 @@ const http = require('http');
 const cors = require('cors');
 const { Server } = require('socket.io');
 const setupSocket = require('./socket/chatHandler');
+const { setIO } = require('./utils/notify');
 
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
@@ -47,6 +48,7 @@ if (require.main === module) {
     cors: { origin: '*', methods: ['GET', 'POST'] },
   });
   setupSocket(io);
+  setIO(io);
 
   const PORT = process.env.PORT || 3000;
   server.listen(PORT, () => {

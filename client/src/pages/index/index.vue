@@ -4,7 +4,7 @@
       <text class="top-title">工大圈子</text>
       <view class="top-actions">
         <text class="icon-btn" @click="goSearch">🔍</text>
-        <text class="icon-btn" @click="goNotifications">🔔</text>
+        <NotificationBell />
       </view>
     </view>
 
@@ -43,6 +43,7 @@
 import { ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import { getPosts } from '../../api/post';
+import NotificationBell from '../../components/NotificationBell.vue';
 import PostCard from '../../components/PostCard.vue';
 
 const posts = ref([]);
@@ -104,9 +105,6 @@ function goPublish() {
 }
 function goSearch() {
   uni.navigateTo({ url: '/pages/search/index' });
-}
-function goNotifications() {
-  uni.navigateTo({ url: '/pages/notifications/index' });
 }
 
 </script>

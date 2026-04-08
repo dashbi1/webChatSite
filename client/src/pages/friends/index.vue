@@ -2,6 +2,7 @@
   <view class="friends-page">
     <view class="nav-row">
       <text class="nav-link" @click="goRequests">好友申请 ></text>
+      <NotificationBell />
     </view>
     <view v-for="f in friends" :key="f.id" class="user-item" @click="goChat(f)">
       <image class="avatar" :src="f.avatar_url || '/static/default-avatar.png'" />
@@ -18,6 +19,7 @@
 <script setup>
 import { ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
+import NotificationBell from '../../components/NotificationBell.vue';
 import { getFriends } from '../../api/friend';
 
 const friends = ref([]);

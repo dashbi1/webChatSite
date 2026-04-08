@@ -1,5 +1,6 @@
 <template>
   <view class="chat-list-page">
+    <view class="top-bar"><NotificationBell /></view>
     <view v-for="conv in conversations" :key="conv.friend_id" class="conv-item" @click="goChat(conv)">
       <image class="avatar" :src="conv.friend?.avatar_url || conv.friend_avatar || '/static/default-avatar.png'" />
       <view class="conv-info">
@@ -18,6 +19,7 @@
 <script setup>
 import { ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
+import NotificationBell from '../../components/NotificationBell.vue';
 import { getConversations } from '../../api/chat';
 
 const conversations = ref([]);
@@ -50,6 +52,7 @@ function formatTime(ts) {
 
 <style scoped>
 .chat-list-page { min-height: 100vh; background: #f5f5f5; }
+.top-bar { display: flex; justify-content: flex-end; padding: 16rpx 24rpx; background: #fff; }
 .conv-item { display: flex; align-items: center; padding: 24rpx; background: #fff; margin-bottom: 2rpx; }
 .avatar { width: 96rpx; height: 96rpx; border-radius: 50%; margin-right: 20rpx; background: #eee; }
 .conv-info { flex: 1; overflow: hidden; }

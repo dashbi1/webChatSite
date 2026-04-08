@@ -1,5 +1,6 @@
 <template>
   <view class="mine-page">
+    <view class="top-bar"><NotificationBell /></view>
     <view class="profile-section">
       <image class="avatar" :src="user.avatar_url || '/static/default-avatar.png'" />
       <view class="info">
@@ -35,6 +36,7 @@
 import { ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import { getMe } from '../../api/user';
+import NotificationBell from '../../components/NotificationBell.vue';
 
 const user = ref({});
 
@@ -75,6 +77,7 @@ function handleLogout() {
 
 <style scoped>
 .mine-page { min-height: 100vh; background: #f5f5f5; }
+.top-bar { display: flex; justify-content: flex-end; padding: 16rpx 24rpx; background: #fff; }
 .profile-section { display: flex; align-items: center; padding: 40rpx 30rpx; background: #fff; margin-bottom: 20rpx; }
 .avatar { width: 120rpx; height: 120rpx; border-radius: 50%; margin-right: 24rpx; background: #eee; }
 .info { flex: 1; }

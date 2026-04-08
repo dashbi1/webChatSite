@@ -1,6 +1,7 @@
 const express = require('express');
 const supabase = require('../config/supabase');
 const { authMiddleware } = require('../middleware/auth');
+const { createNotification } = require('../utils/notify');
 
 const router = express.Router();
 
@@ -54,6 +55,22 @@ router.post('/request', authMiddleware, async (req, res) => {
   if (error) {
     return res.status(500).json({ success: false, error: '发送申请失败' });
   }
+
+  // 获取申请者昵称用于通知
+  const { data: requesterInfo } = await supabase
+    .from('users')
+    .select('nickname')
+    .eq('id', requesterId)
+    .single();
+  const name = requesterInfo?.nickname || '有人';
+
+  await createNotification({
+    userId: addressee_id,
+    triggerUserId: requesterId,
+    type: 'friend_request',
+    content: `${name} 向你发送了好友申请`,
+    referenceId: friendship.id,
+  });
 
   res.json({ success: true, data: friendship });
 });

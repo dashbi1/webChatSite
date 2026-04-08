@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const supabase = require('../config/supabase');
+const { createNotification } = require('../utils/notify');
 
 // 检查好友关系
 async function areFriends(userA, userB) {
@@ -82,6 +83,17 @@ function setupSocket(io) {
       io.to(receiverId).emit('chat:receive', message);
       // 回执给发送者
       socket.emit('chat:sent', message);
+
+      // 私聊通知
+      const preview = content.length > 20 ? content.slice(0, 20) + '...' : content;
+      const senderName = senderUser?.nickname || '有人';
+      await createNotification({
+        userId: receiverId,
+        triggerUserId: userId,
+        type: 'message',
+        content: `${senderName}：${preview}`,
+        referenceId: message.id,
+      });
     });
 
     // 正在输入
