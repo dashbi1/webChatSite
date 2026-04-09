@@ -29,6 +29,11 @@
         <text class="menu-text">好友申请</text>
         <text class="menu-arrow">&#x203A;</text>
       </view>
+      <view class="menu-item" @click="goChangePassword">
+        <text class="menu-icon">&#x1F510;</text>
+        <text class="menu-text">修改密码</text>
+        <text class="menu-arrow">&#x203A;</text>
+      </view>
     </view>
 
     <view v-if="user.role === 'admin'" class="menu-card">
@@ -67,6 +72,7 @@ function goEdit() { uni.navigateTo({ url: '/pages/edit-profile/index' }); }
 function goFriends() { uni.navigateTo({ url: '/pages/friends/index' }); }
 function goRequests() { uni.navigateTo({ url: '/pages/friend-requests/index' }); }
 function goAdmin() { uni.navigateTo({ url: '/pages/admin/index' }); }
+function goChangePassword() { uni.navigateTo({ url: '/pages/change-password/index' }); }
 
 function handleLogout() {
   uni.showModal({

@@ -59,6 +59,10 @@
     {
       "path": "pages/admin/index",
       "style": { "navigationBarTitleText": "管理后台" }
+    },
+    {
+      "path": "pages/change-password/index",
+      "style": { "navigationBarTitleText": "修改密码" }
     }
   ],
   "globalStyle": {

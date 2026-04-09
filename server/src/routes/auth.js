@@ -115,4 +115,37 @@ router.post('/login', async (req, res) => {
   res.json({ success: true, data: { user: safeUser, token } });
 });
 
+// 修改密码
+router.put('/change-password', require('../middleware/auth').authMiddleware, async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  const userId = req.user.id;
+
+  if (!oldPassword || !newPassword) {
+    return res.status(400).json({ success: false, error: '请填写完整信息' });
+  }
+  if (newPassword.length < 6) {
+    return res.status(400).json({ success: false, error: '新密码至少6位' });
+  }
+
+  const { data: user, error } = await supabase
+    .from('users')
+    .select('password_hash')
+    .eq('id', userId)
+    .single();
+
+  if (error || !user) {
+    return res.status(400).json({ success: false, error: '用户不存在' });
+  }
+
+  const valid = await bcrypt.compare(oldPassword, user.password_hash);
+  if (!valid) {
+    return res.status(400).json({ success: false, error: '旧密码不正确' });
+  }
+
+  const newHash = await bcrypt.hash(newPassword, 10);
+  await supabase.from('users').update({ password_hash: newHash }).eq('id', userId);
+
+  res.json({ success: true });
+});
+
 module.exports = router;

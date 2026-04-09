@@ -1,28 +1,34 @@
 <template>
   <view class="chat-page">
     <scroll-view scroll-y class="msg-list" :scroll-into-view="scrollToId">
-      <view
-        v-for="(msg, idx) in messages"
-        :key="msg.id || idx"
-        :id="'msg-' + idx"
-        class="msg-row"
-        :class="{ 'msg-self': msg.sender_id === myId }"
-      >
-        <image
-          v-if="msg.sender_id !== myId"
-          class="msg-avatar"
-          :src="msg.sender?.avatar_url || '/static/default-avatar.png'"
-        />
-        <view class="msg-bubble" :class="{ 'bubble-self': msg.sender_id === myId }">
-          <ShareCard v-if="msg.message_type === 'post_share' && msg.reference_post_id" :postId="msg.reference_post_id" />
-          <text v-else class="msg-text">{{ msg.content }}</text>
+      <template v-for="(item, idx) in displayList" :key="idx">
+        <!-- 时间分隔线 -->
+        <view v-if="item._isTime" class="time-divider">
+          <text class="time-text">{{ item.label }}</text>
         </view>
-        <image
-          v-if="msg.sender_id === myId"
-          class="msg-avatar"
-          :src="myAvatar || '/static/default-avatar.png'"
-        />
-      </view>
+        <!-- 消息 -->
+        <view
+          v-else
+          :id="'msg-' + item._idx"
+          class="msg-row"
+          :class="{ 'msg-self': item.sender_id === myId }"
+        >
+          <image
+            v-if="item.sender_id !== myId"
+            class="msg-avatar"
+            :src="item.sender?.avatar_url || '/static/default-avatar.png'"
+          />
+          <view class="msg-bubble" :class="{ 'bubble-self': item.sender_id === myId }">
+            <ShareCard v-if="item.message_type === 'post_share' && item.reference_post_id" :postId="item.reference_post_id" />
+            <text v-else class="msg-text">{{ item.content }}</text>
+          </view>
+          <image
+            v-if="item.sender_id === myId"
+            class="msg-avatar"
+            :src="myAvatar || '/static/default-avatar.png'"
+          />
+        </view>
+      </template>
       <view v-if="messages.length === 0" class="empty-chat">
         <text class="empty-icon">&#x1F44B;</text>
         <text class="empty-text">打个招呼吧</text>
@@ -41,7 +47,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { getMessages } from '../../api/chat';
 import { getSocket } from '../../utils/socket';
 import ShareCard from '../../components/ShareCard.vue';
@@ -49,19 +55,50 @@ import ShareCard from '../../components/ShareCard.vue';
 const messages = ref([]);
 const inputText = ref('');
 const friendId = ref('');
-const friendName = ref('');
 const myId = ref('');
 const myAvatar = ref('');
 const scrollToId = ref('');
 let socket = null;
+
+// 时间格式化
+function formatChatTime(ts) {
+  const d = new Date(ts);
+  const now = new Date();
+  const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+
+  if (d.toDateString() === now.toDateString()) return hm;
+
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) return `昨天 ${hm}`;
+
+  return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${hm}`;
+}
+
+// 在消息间插入时间分隔线
+const displayList = computed(() => {
+  const result = [];
+  for (let i = 0; i < messages.value.length; i++) {
+    const msg = messages.value[i];
+    const prevMsg = i > 0 ? messages.value[i - 1] : null;
+    const curTime = new Date(msg.created_at).getTime();
+    const prevTime = prevMsg ? new Date(prevMsg.created_at).getTime() : 0;
+
+    // 第一条或间隔 > 5 分钟时插入时间
+    if (!prevMsg || curTime - prevTime > 5 * 60 * 1000) {
+      result.push({ _isTime: true, label: formatChatTime(msg.created_at) });
+    }
+    result.push({ ...msg, _idx: i });
+  }
+  return result;
+});
 
 onMounted(() => {
   const pages = getCurrentPages();
   const current = pages[pages.length - 1];
   const opts = current.$page?.options || current.options || {};
   friendId.value = opts.friendId;
-  friendName.value = decodeURIComponent(opts.name || '聊天');
-  uni.setNavigationBarTitle({ title: friendName.value });
+  uni.setNavigationBarTitle({ title: decodeURIComponent(opts.name || '聊天') });
   const user = JSON.parse(uni.getStorageSync('user') || '{}');
   myId.value = user.id;
   myAvatar.value = user.avatar_url;
@@ -73,6 +110,7 @@ onUnmounted(() => {
   if (socket) {
     socket.off('chat:receive', onReceive);
     socket.off('chat:sent', onSent);
+    socket.off('chat:error', onChatError);
   }
 });
 
@@ -89,6 +127,7 @@ function connectSocket() {
   if (!socket) return;
   socket.on('chat:receive', onReceive);
   socket.on('chat:sent', onSent);
+  socket.on('chat:error', onChatError);
 }
 
 function onReceive(msg) {
@@ -96,6 +135,9 @@ function onReceive(msg) {
 }
 function onSent(msg) {
   if (msg.receiver_id === friendId.value) { messages.value.push(msg); scrollToBottom(); }
+}
+function onChatError(data) {
+  uni.showToast({ title: data.error || '发送失败', icon: 'none', duration: 2000 });
 }
 
 function sendMsg() {
@@ -105,7 +147,10 @@ function sendMsg() {
 }
 
 function scrollToBottom() {
-  nextTick(() => { scrollToId.value = ''; nextTick(() => { scrollToId.value = `msg-${messages.value.length - 1}`; }); });
+  nextTick(() => {
+    scrollToId.value = '';
+    nextTick(() => { scrollToId.value = `msg-${messages.value.length - 1}`; });
+  });
 }
 </script>
 
@@ -113,14 +158,18 @@ function scrollToBottom() {
 .chat-page { display: flex; flex-direction: column; height: 100vh; background: #f0f2f5; }
 .msg-list { flex: 1; padding: 24rpx 20rpx; }
 
+.time-divider { text-align: center; padding: 16rpx 0 24rpx; }
+.time-text {
+  font-size: 22rpx; color: #b0b0b0; background: #e8eaed;
+  padding: 4rpx 20rpx; border-radius: 16rpx;
+}
+
 .msg-row { display: flex; align-items: flex-end; margin-bottom: 28rpx; }
 .msg-self { flex-direction: row-reverse; }
-
 .msg-avatar {
   width: 76rpx; height: 76rpx; border-radius: 50%;
   margin: 0 16rpx; background: #e8eaed; flex-shrink: 0;
 }
-
 .msg-bubble {
   max-width: 65%; padding: 24rpx 28rpx;
   background: #fff; color: #333;
@@ -140,14 +189,12 @@ function scrollToBottom() {
   background: #fff; gap: 16rpx;
   box-shadow: 0 -2rpx 8rpx rgba(0,0,0,0.04);
 }
-.input-wrap {
-  flex: 1; background: #f7f8fa; border-radius: 40rpx; padding: 0 24rpx;
-}
+.input-wrap { flex: 1; background: #f7f8fa; border-radius: 40rpx; padding: 0 24rpx; }
 .msg-input { font-size: 28rpx; padding: 20rpx 0; }
 .send-btn {
   width: 80rpx; height: 80rpx; border-radius: 50%;
   background: #e0e0e0; display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0; transition: background 0.2s;
+  flex-shrink: 0;
 }
 .send-btn.active { background: linear-gradient(135deg, #4A90D9, #5DA0E5); }
 .send-icon { font-size: 32rpx; color: #fff; }
