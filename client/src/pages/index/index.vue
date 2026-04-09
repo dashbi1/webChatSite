@@ -65,8 +65,8 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
-import { onShow } from '@dcloudio/uni-app';
+import { ref, onUnmounted } from 'vue';
+import { onShow, onHide } from '@dcloudio/uni-app';
 import { getPosts } from '../../api/post';
 import NotificationBell from '../../components/NotificationBell.vue';
 import PostCard from '../../components/PostCard.vue';
@@ -81,20 +81,40 @@ const refreshing = ref(false);
 const noMore = ref(false);
 const sortMode = ref('latest');
 const showSkeleton = ref(true);
-let lastLoadTime = 0;
+let pollTimer = null;
 
 onShow(() => {
   checkLogin();
+  // 先展示缓存
   const cached = uni.getStorageSync(`cache_posts_${sortMode.value}`);
-  if (cached) {
+  if (cached && posts.value.length === 0) {
     try { posts.value = JSON.parse(cached); } catch {}
   }
-  if (Date.now() - lastLoadTime > 3000) {
-    loadPosts();
-  } else {
-    showSkeleton.value = false;
-  }
+  // onShow 始终刷新（解决详情页返回后数据不一致）
+  loadPosts();
+  // 启动 30 秒轮询
+  startPoll();
 });
+
+onHide(() => { stopPoll(); });
+onUnmounted(() => { stopPoll(); });
+
+function startPoll() {
+  stopPoll();
+  pollTimer = setInterval(() => { silentRefresh(); }, 30000);
+}
+
+function stopPoll() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+
+async function silentRefresh() {
+  try {
+    const res = await getPosts(1, 20, sortMode.value);
+    posts.value = res.data;
+    uni.setStorageSync(`cache_posts_${sortMode.value}`, JSON.stringify(res.data));
+  } catch {}
+}
 
 function checkLogin() {
   const token = uni.getStorageSync('token');
@@ -117,7 +137,6 @@ async function loadPosts() {
     posts.value = res.data;
     if (res.data.length < 20) noMore.value = true;
     uni.setStorageSync(`cache_posts_${sortMode.value}`, JSON.stringify(res.data));
-    lastLoadTime = Date.now();
   } catch {} finally {
     loading.value = false;
     refreshing.value = false;

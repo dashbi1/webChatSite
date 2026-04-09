@@ -18,8 +18,12 @@
     </view>
 
     <view v-if="canInteract" class="comment-bar">
-      <input v-model="commentText" placeholder="写评论..." class="comment-input" />
-      <button class="btn-send" :disabled="!commentText.trim()" @click="handleComment">发送</button>
+      <view class="comment-input-wrap">
+        <input v-model="commentText" placeholder="写评论..." class="comment-input" @confirm="handleComment" />
+      </view>
+      <view class="send-btn" :class="{ active: commentText.trim() }" @click="handleComment">
+        <text class="send-icon">&#x27A4;</text>
+      </view>
     </view>
     <view v-else class="comment-bar disabled-bar">
       <text class="disabled-text">添加好友后才能评论</text>
@@ -28,15 +32,15 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
-import { getComments, addComment } from '../../api/post';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { getComments, addComment, getPostDetail } from '../../api/post';
 import PostCard from '../../components/PostCard.vue';
-import { get } from '../../api/request';
 
 const post = ref(null);
 const comments = ref([]);
 const commentText = ref('');
 const postId = ref('');
+let pollTimer = null;
 
 const canInteract = computed(() => post.value?.is_friend || post.value?.is_self);
 
@@ -46,25 +50,51 @@ onMounted(() => {
   postId.value = current.$page?.options?.id || current.options?.id;
   loadPost();
   loadComments();
+  // 15 秒轮询评论
+  pollTimer = setInterval(() => { loadComments(); }, 15000);
+});
+
+onUnmounted(() => {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
 });
 
 async function loadPost() {
-  // 重新获取单帖（复用列表接口 + 过滤）
-  const res = await get(`/posts?page=1&limit=100`);
-  post.value = res.data.find(p => p.id === postId.value) || null;
+  try {
+    const res = await getPostDetail(postId.value);
+    post.value = res.data;
+  } catch {}
 }
 
 async function loadComments() {
-  const res = await getComments(postId.value);
-  comments.value = res.data;
+  try {
+    const res = await getComments(postId.value);
+    comments.value = res.data;
+  } catch {}
 }
 
 async function handleComment() {
   if (!commentText.value.trim()) return;
-  await addComment(postId.value, commentText.value);
+  const text = commentText.value.trim();
   commentText.value = '';
-  loadComments();
-  loadPost();
+
+  // 乐观更新：立即追加到本地
+  const me = JSON.parse(uni.getStorageSync('user') || '{}');
+  comments.value.push({
+    id: 'temp-' + Date.now(),
+    content: text,
+    created_at: new Date().toISOString(),
+    user: { id: me.id, nickname: me.nickname, avatar_url: me.avatar_url },
+  });
+
+  try {
+    await addComment(postId.value, text);
+    // 重新拉取真实数据
+    loadComments();
+    loadPost();
+  } catch {
+    // 失败时回滚
+    comments.value = comments.value.filter(c => !String(c.id).startsWith('temp-'));
+  }
 }
 
 function formatTime(ts) {
@@ -75,24 +105,36 @@ function formatTime(ts) {
 </script>
 
 <style scoped>
-.detail-page { min-height: 100vh; background: #f5f5f5; padding-bottom: 120rpx; }
-.comments-section { background: #fff; margin-top: 16rpx; padding: 24rpx; }
-.section-title { font-size: 30rpx; font-weight: 600; color: #333; margin-bottom: 20rpx; display: block; }
-.comment-item { display: flex; padding: 16rpx 0; border-bottom: 1rpx solid #f0f0f0; }
-.comment-avatar { width: 64rpx; height: 64rpx; border-radius: 50%; margin-right: 16rpx; background: #eee; }
+.detail-page { min-height: 100vh; background: #f7f8fa; padding-bottom: 120rpx; }
+.comments-section {
+  background: #fff; margin: 16rpx 24rpx; padding: 28rpx;
+  border-radius: 20rpx; box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.04);
+}
+.section-title { font-size: 30rpx; font-weight: 600; color: #1a1a2e; margin-bottom: 20rpx; display: block; }
+.comment-item { display: flex; padding: 20rpx 0; border-bottom: 1rpx solid #f5f5f5; }
+.comment-item:last-child { border-bottom: none; }
+.comment-avatar { width: 68rpx; height: 68rpx; border-radius: 50%; margin-right: 16rpx; background: #f0f2f5; flex-shrink: 0; }
 .comment-body { flex: 1; }
-.comment-nick { font-size: 26rpx; color: #4A90D9; display: block; }
-.comment-text { font-size: 28rpx; color: #333; margin: 8rpx 0; display: block; }
-.comment-time { font-size: 22rpx; color: #999; display: block; }
-.empty-comment { text-align: center; padding: 40rpx; color: #999; font-size: 26rpx; }
+.comment-nick { font-size: 26rpx; color: #4A90D9; font-weight: 500; display: block; }
+.comment-text { font-size: 28rpx; color: #333; margin: 8rpx 0; display: block; line-height: 1.6; }
+.comment-time { font-size: 22rpx; color: #ccc; display: block; }
+.empty-comment { text-align: center; padding: 48rpx; color: #ccc; font-size: 26rpx; }
+
 .comment-bar {
   position: fixed; bottom: 0; left: 0; right: 0;
-  display: flex; align-items: center; padding: 16rpx 24rpx;
-  background: #fff; border-top: 1rpx solid #eee;
+  display: flex; align-items: center; padding: 16rpx 24rpx 24rpx;
+  background: #fff; gap: 16rpx;
+  box-shadow: 0 -2rpx 8rpx rgba(0,0,0,0.04);
 }
-.comment-input { flex: 1; border: 1rpx solid #e0e0e0; border-radius: 32rpx; padding: 16rpx 24rpx; font-size: 28rpx; }
-.btn-send { width: 120rpx; background: #4A90D9; color: #fff; border: none; border-radius: 32rpx; font-size: 26rpx; margin-left: 16rpx; padding: 16rpx 0; }
-.btn-send[disabled] { opacity: 0.5; }
+.comment-input-wrap { flex: 1; background: #f7f8fa; border-radius: 40rpx; padding: 0 24rpx; }
+.comment-input { font-size: 28rpx; padding: 20rpx 0; }
+.send-btn {
+  width: 80rpx; height: 80rpx; border-radius: 50%;
+  background: #e0e0e0; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.send-btn.active { background: linear-gradient(135deg, #4A90D9, #5DA0E5); }
+.send-icon { font-size: 32rpx; color: #fff; }
 .disabled-bar { justify-content: center; }
-.disabled-text { color: #999; font-size: 26rpx; }
+.disabled-text { color: #b0b0b0; font-size: 26rpx; }
 </style>
