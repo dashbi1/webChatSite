@@ -193,15 +193,17 @@ describe('Phase 8: 管理后台 + 举报', () => {
     });
 
     test('无效操作 → 400', async () => {
-      // 先创建一个新举报
-      const newPost = await authPost('/api/posts', userB.token, { content: '另一个' });
-      await authPost('/api/reports', userA.token, {
-        target_type: 'post', target_id: newPost.body.data.id, reason: '测试',
-      });
-      const listRes = await authGet('/api/admin/reports?status=pending', admin.token);
-      const report = listRes.body.data[0];
+      // 确保用户未被封禁
+      await authPut(`/api/admin/users/${userA.user.id}/unban`, admin.token);
+      await authPut(`/api/admin/users/${userB.user.id}/unban`, admin.token);
 
-      const res = await authPut(`/api/admin/reports/${report.id}`, admin.token, { action: 'invalid' });
+      const newPost = await authPost('/api/posts', userA.token, { content: '无效操作测试帖' });
+      const reportRes = await authPost('/api/reports', userB.token, {
+        target_type: 'post', target_id: newPost.body.data.id, reason: '无效操作测试',
+      });
+      const reportId = reportRes.body.data.id;
+
+      const res = await authPut(`/api/admin/reports/${reportId}`, admin.token, { action: 'invalid' });
       expect(res.status).toBe(400);
     });
   });

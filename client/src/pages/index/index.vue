@@ -3,14 +3,22 @@
     <view class="top-bar">
       <text class="top-title">工大圈子</text>
       <view class="top-actions">
-        <text class="icon-btn" @click="goSearch">🔍</text>
+        <view class="icon-wrap" @click="goSearch">
+          <text class="icon-text">&#x1F50D;</text>
+        </view>
         <NotificationBell />
       </view>
     </view>
 
     <view class="sort-tabs">
-      <text class="sort-tab" :class="{ active: sortMode === 'latest' }" @click="switchSort('latest')">最新</text>
-      <text class="sort-tab" :class="{ active: sortMode === 'hot' }" @click="switchSort('hot')">热门</text>
+      <view class="tab-item" :class="{ active: sortMode === 'latest' }" @click="switchSort('latest')">
+        <text class="tab-text">最新</text>
+        <view v-if="sortMode === 'latest'" class="tab-indicator" />
+      </view>
+      <view class="tab-item" :class="{ active: sortMode === 'hot' }" @click="switchSort('hot')">
+        <text class="tab-text">热门</text>
+        <view v-if="sortMode === 'hot'" class="tab-indicator" />
+      </view>
     </view>
 
     <scroll-view
@@ -31,19 +39,21 @@
       <template v-if="showSkeleton && posts.length === 0">
         <SkeletonPost v-for="i in 3" :key="'sk'+i" />
       </template>
-      <view v-if="posts.length === 0 && !loading && !showSkeleton" class="empty">
-        <text>还没有人发帖，成为第一个吧！</text>
+      <view v-if="posts.length === 0 && !loading && !showSkeleton" class="empty-state">
+        <text class="empty-icon">&#x1F4DD;</text>
+        <text class="empty-text">还没有人发帖</text>
+        <text class="empty-sub">成为第一个分享的人吧</text>
       </view>
-      <view v-if="loading" class="loading-tip">
-        <text>加载中...</text>
+      <view v-if="loading && posts.length > 0" class="loading-tip">
+        <text class="loading-dot">...</text>
       </view>
       <view v-if="noMore && posts.length > 0" class="loading-tip">
-        <text>没有更多了</text>
+        <text class="end-text">- 到底了 -</text>
       </view>
     </scroll-view>
 
     <view class="fab" @click="goPublish">
-      <text class="fab-text">+</text>
+      <text class="fab-icon">+</text>
     </view>
 
     <FriendPicker
@@ -75,12 +85,10 @@ let lastLoadTime = 0;
 
 onShow(() => {
   checkLogin();
-  // 先展示缓存
   const cached = uni.getStorageSync(`cache_posts_${sortMode.value}`);
   if (cached) {
     try { posts.value = JSON.parse(cached); } catch {}
   }
-  // 3 秒内不重复请求
   if (Date.now() - lastLoadTime > 3000) {
     loadPosts();
   } else {
@@ -90,9 +98,7 @@ onShow(() => {
 
 function checkLogin() {
   const token = uni.getStorageSync('token');
-  if (!token) {
-    uni.reLaunch({ url: '/pages/login/index' });
-  }
+  if (!token) uni.reLaunch({ url: '/pages/login/index' });
 }
 
 function switchSort(mode) {
@@ -110,11 +116,9 @@ async function loadPosts() {
     const res = await getPosts(1, 20, sortMode.value);
     posts.value = res.data;
     if (res.data.length < 20) noMore.value = true;
-    // 缓存
     uni.setStorageSync(`cache_posts_${sortMode.value}`, JSON.stringify(res.data));
     lastLoadTime = Date.now();
-  } catch {
-  } finally {
+  } catch {} finally {
     loading.value = false;
     refreshing.value = false;
     showSkeleton.value = false;
@@ -129,31 +133,17 @@ async function loadMore() {
     const res = await getPosts(page.value, 20, sortMode.value);
     posts.value.push(...res.data);
     if (res.data.length < 20) noMore.value = true;
-  } catch {
-  } finally {
-    loading.value = false;
-  }
+  } catch {} finally { loading.value = false; }
 }
 
-function onRefresh() {
-  refreshing.value = true;
-  loadPosts();
-}
-
-function goPublish() {
-  uni.navigateTo({ url: '/pages/publish/index' });
-}
-function goSearch() {
-  uni.navigateTo({ url: '/pages/search/index' });
-}
+function onRefresh() { refreshing.value = true; loadPosts(); }
+function goPublish() { uni.navigateTo({ url: '/pages/publish/index' }); }
+function goSearch() { uni.navigateTo({ url: '/pages/search/index' }); }
 
 const showPicker = ref(false);
 const sharePost = ref(null);
 
-function onShare(post) {
-  sharePost.value = post;
-  showPicker.value = true;
-}
+function onShare(post) { sharePost.value = post; showPicker.value = true; }
 
 function forwardToFriend(friend) {
   showPicker.value = false;
@@ -170,28 +160,53 @@ function forwardToFriend(friend) {
 </script>
 
 <style scoped>
-.feed-page { min-height: 100vh; background: #f5f5f5; }
+.feed-page { min-height: 100vh; background: #f7f8fa; }
 .top-bar {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 20rpx 24rpx; background: #fff; border-bottom: 1rpx solid #eee;
+  padding: 24rpx 32rpx; background: #fff;
   position: sticky; top: 0; z-index: 10;
 }
-.top-title { font-size: 36rpx; font-weight: bold; color: #4A90D9; }
-.top-actions { display: flex; gap: 24rpx; }
-.icon-btn { font-size: 36rpx; }
+.top-title { font-size: 38rpx; font-weight: 700; color: #1a1a2e; letter-spacing: 2rpx; }
+.top-actions { display: flex; align-items: center; gap: 20rpx; }
+.icon-wrap { padding: 8rpx; }
+.icon-text { font-size: 36rpx; }
+
 .sort-tabs {
-  display: flex; justify-content: center; gap: 48rpx;
-  padding: 20rpx 0; background: #fff; border-bottom: 1rpx solid #f0f0f0;
+  display: flex; justify-content: center; gap: 64rpx;
+  padding: 20rpx 0 0; background: #fff;
+  border-bottom: 1rpx solid #f0f0f0;
 }
-.sort-tab { font-size: 28rpx; color: #999; padding-bottom: 8rpx; }
-.sort-tab.active { color: #4A90D9; font-weight: bold; border-bottom: 4rpx solid #4A90D9; }
-.feed-list { height: calc(100vh - 160rpx); padding: 16rpx; }
-.empty { text-align: center; padding: 100rpx 0; color: #999; font-size: 28rpx; }
-.loading-tip { text-align: center; padding: 30rpx; color: #999; font-size: 26rpx; }
+.tab-item {
+  display: flex; flex-direction: column; align-items: center;
+  padding-bottom: 16rpx; position: relative;
+}
+.tab-text { font-size: 28rpx; color: #999; }
+.tab-item.active .tab-text { color: #4A90D9; font-weight: 600; }
+.tab-indicator {
+  width: 40rpx; height: 6rpx; border-radius: 3rpx;
+  background: #4A90D9; margin-top: 8rpx;
+}
+
+.feed-list { height: calc(100vh - 180rpx); padding: 16rpx 24rpx; }
+
+.empty-state {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 120rpx 0; gap: 12rpx;
+}
+.empty-icon { font-size: 80rpx; }
+.empty-text { font-size: 30rpx; color: #666; font-weight: 500; }
+.empty-sub { font-size: 24rpx; color: #b0b0b0; }
+
+.loading-tip { text-align: center; padding: 32rpx; }
+.loading-dot { font-size: 32rpx; color: #ccc; letter-spacing: 8rpx; }
+.end-text { font-size: 24rpx; color: #ccc; }
+
 .fab {
-  position: fixed; right: 40rpx; bottom: 200rpx; width: 100rpx; height: 100rpx;
-  border-radius: 50%; background: #4A90D9; display: flex; align-items: center;
-  justify-content: center; box-shadow: 0 4rpx 16rpx rgba(74, 144, 217, 0.4);
+  position: fixed; right: 40rpx; bottom: 200rpx;
+  width: 108rpx; height: 108rpx; border-radius: 50%;
+  background: linear-gradient(135deg, #4A90D9, #5DA0E5);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 8rpx 28rpx rgba(74, 144, 217, 0.4);
 }
-.fab-text { color: #fff; font-size: 48rpx; line-height: 1; }
+.fab-icon { color: #fff; font-size: 52rpx; line-height: 1; font-weight: 300; }
 </style>

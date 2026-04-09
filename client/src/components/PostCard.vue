@@ -7,16 +7,20 @@
         mode="aspectFill"
         @click.stop="goProfile"
       />
-      <view class="info">
+      <view class="header-info">
         <text class="nickname">{{ post.author?.nickname || '匿名用户' }}</text>
-        <text class="time">{{ formatTime(post.created_at) }}</text>
+        <view class="meta-row">
+          <text class="time">{{ formatTime(post.created_at) }}</text>
+          <text v-if="post.is_edited" class="edited-tag">已编辑</text>
+        </view>
       </view>
-      <text v-if="post.is_edited" class="edited-tag">已编辑</text>
-      <text class="more-btn" @click.stop="showActions">···</text>
+      <text class="more-btn" @click.stop="showActions">
+        <text class="dot" /><text class="dot" /><text class="dot" />
+      </text>
     </view>
 
-    <view class="post-content">
-      <text>{{ post.content }}</text>
+    <view class="post-body">
+      <text class="post-content">{{ post.content }}</text>
     </view>
 
     <!-- 媒体展示 -->
@@ -46,21 +50,24 @@
 
     <view class="post-actions">
       <view
-        class="action"
-        :class="{ active: post.is_liked, disabled: !canInteract }"
+        class="action-item"
+        :class="{ liked: post.is_liked, disabled: !canInteract }"
         @click.stop="handleLike"
       >
-        <text>{{ post.is_liked ? '♥' : '♡' }} {{ post.like_count || 0 }}</text>
+        <text class="action-icon">{{ post.is_liked ? '♥' : '♡' }}</text>
+        <text class="action-num">{{ post.like_count || 0 }}</text>
       </view>
       <view
-        class="action"
+        class="action-item"
         :class="{ disabled: !canInteract }"
         @click.stop="goDetail"
       >
-        <text>💬 {{ post.comment_count || 0 }}</text>
+        <text class="action-icon">&#x1F4AC;</text>
+        <text class="action-num">{{ post.comment_count || 0 }}</text>
       </view>
-      <view class="action" @click.stop="handleShare">
-        <text>↗ 转发</text>
+      <view class="action-item" @click.stop="handleShare">
+        <text class="action-icon">&#x21AA;</text>
+        <text class="action-num">转发</text>
       </view>
     </view>
   </view>
@@ -91,7 +98,6 @@ function isVideo(url) {
 
 const imageUrls = computed(() => allMedia.value.filter(u => !isVideo(u)));
 const videoUrls = computed(() => allMedia.value.filter(u => isVideo(u)));
-// 保持 images 兼容（转发等场景用）
 const images = allMedia;
 
 function formatTime(ts) {
@@ -119,7 +125,6 @@ async function handleLike() {
 function showActions() {
   const isSelf = props.post.is_self;
   const items = isSelf ? ['编辑', '删除'] : ['举报'];
-
   uni.showActionSheet({
     itemList: items,
     success: (res) => {
@@ -145,7 +150,6 @@ function showActions() {
           });
         }
       } else {
-        // 举报
         reportPost();
       }
     },
@@ -183,24 +187,58 @@ function handleShare() {
 </script>
 
 <style scoped>
-.post-card { background: #fff; padding: 24rpx; margin-bottom: 16rpx; border-radius: 12rpx; }
-.post-header { display: flex; align-items: center; margin-bottom: 16rpx; }
-.avatar { width: 80rpx; height: 80rpx; border-radius: 50%; margin-right: 16rpx; background: #eee; }
-.info { flex: 1; }
-.nickname { display: block; font-size: 30rpx; font-weight: 500; color: #333; }
-.time { display: block; font-size: 24rpx; color: #999; margin-top: 4rpx; }
-.edited-tag { font-size: 22rpx; color: #999; background: #f5f5f5; padding: 4rpx 12rpx; border-radius: 8rpx; }
-.more-btn { font-size: 36rpx; color: #999; padding: 8rpx 16rpx; font-weight: bold; letter-spacing: 2rpx; }
-.post-content { font-size: 30rpx; line-height: 1.6; color: #333; margin-bottom: 20rpx; }
+.post-card {
+  background: #fff;
+  padding: 28rpx 32rpx;
+  margin-bottom: 16rpx;
+  border-radius: 20rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.04);
+}
+.post-header { display: flex; align-items: center; margin-bottom: 20rpx; }
+.avatar {
+  width: 84rpx; height: 84rpx; border-radius: 50%;
+  margin-right: 20rpx; background: #f0f2f5;
+  border: 2rpx solid rgba(74, 144, 217, 0.1);
+}
+.header-info { flex: 1; }
+.nickname { display: block; font-size: 30rpx; font-weight: 600; color: #1a1a2e; }
+.meta-row { display: flex; align-items: center; gap: 12rpx; margin-top: 4rpx; }
+.time { font-size: 24rpx; color: #b0b0b0; }
+.edited-tag {
+  font-size: 20rpx; color: #4A90D9; background: #EBF3FC;
+  padding: 2rpx 12rpx; border-radius: 8rpx;
+}
+.more-btn {
+  display: flex; gap: 4rpx; padding: 16rpx; align-items: center;
+}
+.dot {
+  display: inline-block; width: 6rpx; height: 6rpx;
+  background: #c0c0c0; border-radius: 50%;
+}
+
+.post-body { margin-bottom: 20rpx; }
+.post-content { font-size: 28rpx; line-height: 1.7; color: #333; word-break: break-all; }
+
 .image-grid { display: flex; flex-wrap: wrap; gap: 8rpx; margin-bottom: 20rpx; }
-.post-img { border-radius: 8rpx; background: #f0f0f0; }
+.post-img { border-radius: 12rpx; background: #f0f2f5; }
 .grid-1 .post-img { width: 100%; max-height: 500rpx; }
 .grid-2 .post-img { width: calc(50% - 4rpx); height: 300rpx; }
 .grid-3 .post-img { width: calc(33.33% - 6rpx); height: 220rpx; }
 .video-wrap { margin-bottom: 20rpx; }
-.post-video { width: 100%; border-radius: 8rpx; }
-.post-actions { display: flex; border-top: 1rpx solid #f0f0f0; padding-top: 16rpx; }
-.action { flex: 1; text-align: center; font-size: 26rpx; color: #666; }
-.action.active { color: #e74c3c; }
-.action.disabled { color: #ccc; }
+.post-video { width: 100%; border-radius: 12rpx; }
+
+.post-actions {
+  display: flex; padding-top: 16rpx;
+  border-top: 1rpx solid #f5f5f5;
+}
+.action-item {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  gap: 8rpx; padding: 8rpx 0;
+}
+.action-icon { font-size: 28rpx; }
+.action-num { font-size: 24rpx; color: #999; }
+.action-item.liked .action-icon { color: #e74c3c; }
+.action-item.liked .action-num { color: #e74c3c; }
+.action-item.disabled .action-icon { color: #ddd; }
+.action-item.disabled .action-num { color: #ddd; }
 </style>

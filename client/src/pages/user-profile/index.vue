@@ -62,14 +62,26 @@ function reportUser() {
 </script>
 
 <style scoped>
-.profile-page { min-height: 100vh; background: #f5f5f5; }
-.profile-card { background: #fff; padding: 60rpx 40rpx; text-align: center; }
-.avatar { width: 160rpx; height: 160rpx; border-radius: 50%; margin-bottom: 20rpx; background: #eee; }
-.nickname { display: block; font-size: 36rpx; font-weight: bold; color: #333; }
+.profile-page { min-height: 100vh; background: #f7f8fa; }
+.profile-card {
+  background: #fff; padding: 64rpx 40rpx 48rpx; text-align: center;
+  border-radius: 0 0 32rpx 32rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.04);
+}
+.avatar {
+  width: 180rpx; height: 180rpx; border-radius: 50%; margin-bottom: 20rpx;
+  background: #f0f2f5; border: 4rpx solid #fff;
+  box-shadow: 0 4rpx 16rpx rgba(0,0,0,0.08);
+}
+.nickname { display: block; font-size: 38rpx; font-weight: 700; color: #1a1a2e; }
 .meta { display: block; font-size: 26rpx; color: #999; margin-top: 8rpx; }
-.actions { padding: 40rpx; }
-.btn-primary { background: #4A90D9; color: #fff; border: none; border-radius: 12rpx; padding: 24rpx; font-size: 30rpx; }
-.btn-disabled { background: #e0e0e0; color: #999; border: none; border-radius: 12rpx; padding: 24rpx; font-size: 30rpx; }
-.btn-chat { background: #27ae60; color: #fff; border: none; border-radius: 12rpx; padding: 24rpx; font-size: 30rpx; }
-.btn-report { background: #fff; color: #e74c3c; border: 1rpx solid #e74c3c; border-radius: 12rpx; padding: 24rpx; font-size: 26rpx; margin-top: 20rpx; }
+.actions { padding: 40rpx 32rpx; display: flex; flex-direction: column; gap: 16rpx; }
+.btn-primary {
+  background: linear-gradient(135deg, #4A90D9, #5DA0E5); color: #fff;
+  border: none; border-radius: 16rpx; padding: 28rpx; font-size: 30rpx; font-weight: 600;
+  box-shadow: 0 8rpx 24rpx rgba(74, 144, 217, 0.3);
+}
+.btn-disabled { background: #f0f2f5; color: #b0b0b0; border: none; border-radius: 16rpx; padding: 28rpx; font-size: 30rpx; }
+.btn-chat { background: #27ae60; color: #fff; border: none; border-radius: 16rpx; padding: 28rpx; font-size: 30rpx; font-weight: 600; }
+.btn-report { background: #fff; color: #e74c3c; border: none; border-radius: 16rpx; padding: 24rpx; font-size: 26rpx; }
 </style>
