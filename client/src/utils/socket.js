@@ -1,6 +1,7 @@
 import { io } from 'socket.io-client';
+import { SOCKET_URL } from '../config/env';
 
-const SERVER_URL = 'http://localhost:3000';
+const SERVER_URL = SOCKET_URL;
 let socket = null;
 
 export function getSocket() {

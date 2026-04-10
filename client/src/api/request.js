@@ -1,4 +1,5 @@
-const BASE_URL = 'http://localhost:3000/api';
+import { API_BASE } from '../config/env';
+const BASE_URL = API_BASE;
 
 export function request(options) {
   const token = uni.getStorageSync('token');

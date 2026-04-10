@@ -44,6 +44,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { createPost, editPost } from '../../api/post';
+import { UPLOAD_URL } from '../../config/env';
 
 const content = ref('');
 const images = ref([]);
@@ -120,7 +121,7 @@ async function uploadImages() {
     uploadProgress.value = `上传图片 ${i + 1}/${images.value.length}...`;
     const url = await new Promise((resolve, reject) => {
       uni.uploadFile({
-        url: 'http://localhost:3000/api/upload/post-image',
+        url: `${UPLOAD_URL}/post-image`,
         filePath: img.tempPath,
         name: 'file',
         header: { Authorization: `Bearer ${uni.getStorageSync('token')}` },
@@ -148,7 +149,7 @@ async function uploadAllMedia() {
     uploadProgress.value = `上传视频 ${i + 1}/${videos.value.length}...`;
     const url = await new Promise((resolve, reject) => {
       uni.uploadFile({
-        url: 'http://localhost:3000/api/upload/post-video',
+        url: `${UPLOAD_URL}/post-video`,
         filePath: v.tempPath,
         name: 'file',
         header: { Authorization: `Bearer ${uni.getStorageSync('token')}` },

@@ -1,0 +1,85 @@
+# Nginx 配置 - 工大圈子后端
+# 安装路径：/etc/nginx/sites-available/hit-circle
+# 启用：sudo ln -s /etc/nginx/sites-available/hit-circle /etc/nginx/sites-enabled/
+
+upstream hit_circle_backend {
+    server 127.0.0.1:3000;
+    keepalive 64;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+
+    # ⚠️ 改成你的域名或 VPS 公网 IP
+    server_name YOUR_DOMAIN_OR_IP;
+
+    # 访问日志
+    access_log /var/log/nginx/hit-circle.access.log;
+    error_log /var/log/nginx/hit-circle.error.log;
+
+    # 文件上传大小限制（视频帖 20MB）
+    client_max_body_size 30M;
+
+    # API 反向代理
+    location /api/ {
+        proxy_pass http://hit_circle_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+
+    # Socket.io WebSocket 支持
+    location /socket.io/ {
+        proxy_pass http://hit_circle_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 86400;  # 长连接保持 24 小时
+    }
+
+    # 管理后台静态文件（可选，隐藏路径）
+    # ⚠️ 将 console-k8m2x7 改成你在 .env 里配置的 ADMIN_PATH
+    location /console-k8m2x7/ {
+        proxy_pass http://hit_circle_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # 默认返回 404（不响应未配置的路径，避免暴露信息）
+    location / {
+        return 404;
+    }
+
+    # 禁止访问 .env 等敏感文件
+    location ~ /\.(env|git) {
+        deny all;
+        return 404;
+    }
+}
+
+# HTTPS 配置（Certbot 自动生成）
+# 运行 certbot 后此部分会被自动添加，这里仅作参考：
+#
+# server {
+#     listen 443 ssl http2;
+#     listen [::]:443 ssl http2;
+#     server_name yourdomain.com;
+#
+#     ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
+#     ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
+#     include /etc/letsencrypt/options-ssl-nginx.conf;
+#     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+#
+#     # ... 同 80 端口的 location 配置
+# }

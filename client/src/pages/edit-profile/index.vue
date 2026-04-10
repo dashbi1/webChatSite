@@ -29,6 +29,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { getMe, updateProfile as updateMe } from '../../api/user';
+import { UPLOAD_URL } from '../../config/env';
 
 const form = ref({ nickname: '', college: '', grade: '', avatar_url: '' });
 const saving = ref(false);
@@ -56,7 +57,7 @@ function changeAvatar() {
       try {
         const uploadRes = await new Promise((resolve, reject) => {
           uni.uploadFile({
-            url: 'http://localhost:3000/api/upload/avatar',
+            url: `${UPLOAD_URL}/avatar`,
             filePath: tempPath,
             name: 'file',
             header: {
