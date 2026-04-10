@@ -30,7 +30,7 @@ const CONFIGS = {
 };
 
 // 当前使用的环境
-const CURRENT = 'dev';
+const CURRENT = 'avd';
 
 export const API_BASE = CONFIGS[CURRENT].API_BASE;
 export const SOCKET_URL = CONFIGS[CURRENT].SOCKET_URL;
