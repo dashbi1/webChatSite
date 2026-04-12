@@ -6,3 +6,4 @@ server/.env
 client/unpackage/
 .DS_Store
 *.log
+server/deploy/deploy.conf
