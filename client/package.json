@@ -36,6 +36,8 @@
     "build:quickapp-webview-union": "uni build -p quickapp-webview-union"
   },
   "dependencies": {
+    "@capacitor/android": "^6.2.1",
+    "@capacitor/core": "^6.2.1",
     "@dcloudio/uni-app": "3.0.0-5000620260331001",
     "@dcloudio/uni-app-harmony": "3.0.0-5000620260331001",
     "@dcloudio/uni-app-plus": "3.0.0-5000620260331001",
@@ -57,6 +59,7 @@
     "vue-i18n": "^9.1.9"
   },
   "devDependencies": {
+    "@capacitor/cli": "^6.2.1",
     "@dcloudio/types": "^3.4.8",
     "@dcloudio/uni-automator": "3.0.0-5000620260331001",
     "@dcloudio/uni-cli-shared": "3.0.0-5000620260331001",

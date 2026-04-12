@@ -1,0 +1,9 @@
+{
+  "appId": "com.hit.circle",
+  "appName": "工大圈子",
+  "webDir": "dist/build/h5",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  }
+}
