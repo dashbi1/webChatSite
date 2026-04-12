@@ -1,0 +1,27 @@
+# ============================================================
+# 工大圈子 - 部署配置（一处修改，全局生效）
+# ============================================================
+# 用法：
+#   1. cp deploy.conf.example deploy.conf
+#   2. 编辑 deploy.conf，填入实际值
+#   3. 运行 ./setup-nginx.sh 自动生成 Nginx 配置
+# ============================================================
+
+# VPS 公网 IP（必填）
+VPS_IP=YOUR_VPS_IP
+
+# 后端端口（与 server/.env 中的 PORT 一致）
+BACKEND_PORT=3000
+
+# SSL 证书路径（必填）
+SSL_CERT_PATH=/path/to/cert.pem
+SSL_KEY_PATH=/path/to/key.pem
+
+# 管理后台路径（与 server/.env 中的 ADMIN_PATH 一致）
+ADMIN_PATH=console-k8m2x7
+
+# H5 前端静态文件目录
+H5_ROOT_PATH=/opt/hit-circle/client/h5
+
+# Nginx 上传大小限制
+CLIENT_MAX_BODY_SIZE=30M

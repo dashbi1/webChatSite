@@ -23,9 +23,9 @@ const CONFIGS = {
     SOCKET_URL: 'http://192.168.1.100:3000',
   },
   prod: {
-    // ⚠️ 改成你的 VPS 公网地址（建议配好 HTTPS 后用 https://）
-    API_BASE: 'http://YOUR_VPS_IP:3000/api',
-    SOCKET_URL: 'http://YOUR_VPS_IP:3000',
+    // ⚠️ 部署前必改：换成你的 VPS 公网 IP（走 Nginx 反向代理，无需端口号）
+    API_BASE: 'https://YOUR_VPS_IP/api',
+    SOCKET_URL: 'https://YOUR_VPS_IP',
   },
 };
 

@@ -1,27 +1,59 @@
-# Nginx 配置 - 工大圈子后端
+# Nginx 配置 - 工大圈子（HTTPS + H5 前端 + 后端反向代理）
 # 安装路径：/etc/nginx/sites-available/hit-circle
 # 启用：sudo ln -s /etc/nginx/sites-available/hit-circle /etc/nginx/sites-enabled/
+#
+# ⚠️ 部署前需替换以下占位符：
+#   YOUR_VPS_IP       → VPS 公网 IP，如 123.45.67.89
+#   SSL_CERT_PATH     → SSL 证书路径，如 /etc/ssl/certs/server.pem
+#   SSL_KEY_PATH      → SSL 私钥路径，如 /etc/ssl/private/server.key
+#   ADMIN_PATH        → 管理后台路径，与 server/.env 中的 ADMIN_PATH 一致
+#   H5_ROOT_PATH      → H5 构建产物的绝对路径，如 /opt/hit-circle/client/h5
 
 upstream hit_circle_backend {
     server 127.0.0.1:3000;
     keepalive 64;
 }
 
+# HTTP 80 → 重定向到 HTTPS 443
 server {
     listen 80;
     listen [::]:80;
+    server_name YOUR_VPS_IP;
 
-    # ⚠️ 改成你的域名或 VPS 公网 IP
-    server_name YOUR_DOMAIN_OR_IP;
+    return 301 https://$host$request_uri;
+}
 
-    # 访问日志
+# HTTPS 443 主配置
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name YOUR_VPS_IP;
+
+    # ---------- SSL 证书 ----------
+    ssl_certificate     SSL_CERT_PATH;
+    ssl_certificate_key SSL_KEY_PATH;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    # ---------- 日志 ----------
     access_log /var/log/nginx/hit-circle.access.log;
-    error_log /var/log/nginx/hit-circle.error.log;
+    error_log  /var/log/nginx/hit-circle.error.log;
 
-    # 文件上传大小限制（视频帖 20MB）
+    # ---------- 文件上传大小限制 ----------
     client_max_body_size 30M;
 
-    # API 反向代理
+    # ---------- H5 前端静态文件 ----------
+    # uni-app H5 构建产物，作为网站根目录
+    location / {
+        root H5_ROOT_PATH;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # ---------- API 反向代理 ----------
     location /api/ {
         proxy_pass http://hit_circle_backend;
         proxy_http_version 1.1;
@@ -34,7 +66,7 @@ server {
         proxy_read_timeout 60s;
     }
 
-    # Socket.io WebSocket 支持
+    # ---------- Socket.io WebSocket ----------
     location /socket.io/ {
         proxy_pass http://hit_circle_backend;
         proxy_http_version 1.1;
@@ -43,12 +75,12 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_read_timeout 86400;  # 长连接保持 24 小时
+        proxy_read_timeout 86400;
     }
 
-    # 管理后台静态文件（可选，隐藏路径）
-    # ⚠️ 将 console-k8m2x7 改成你在 .env 里配置的 ADMIN_PATH
-    location /console-k8m2x7/ {
+    # ---------- 管理后台 ----------
+    # ⚠️ 把 ADMIN_PATH 替换为 .env 中配置的值
+    location /ADMIN_PATH/ {
         proxy_pass http://hit_circle_backend;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -56,30 +88,9 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }
 
-    # 默认返回 404（不响应未配置的路径，避免暴露信息）
-    location / {
-        return 404;
-    }
-
-    # 禁止访问 .env 等敏感文件
+    # ---------- 安全：禁止访问敏感文件 ----------
     location ~ /\.(env|git) {
         deny all;
         return 404;
     }
 }
-
-# HTTPS 配置（Certbot 自动生成）
-# 运行 certbot 后此部分会被自动添加，这里仅作参考：
-#
-# server {
-#     listen 443 ssl http2;
-#     listen [::]:443 ssl http2;
-#     server_name yourdomain.com;
-#
-#     ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
-#     ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
-#     include /etc/letsencrypt/options-ssl-nginx.conf;
-#     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
-#
-#     # ... 同 80 端口的 location 配置
-# }
