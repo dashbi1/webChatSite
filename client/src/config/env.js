@@ -24,13 +24,13 @@ const CONFIGS = {
   },
   prod: {
     // ⚠️ 部署前必改：换成你的 VPS 公网 IP（走 Nginx 反向代理，无需端口号）
-    API_BASE: 'https://YOUR_VPS_IP/api',
-    SOCKET_URL: 'https://YOUR_VPS_IP',
+    API_BASE: 'https://agent666.xyz/api',
+    SOCKET_URL: 'https://agent666.xyz',
   },
 };
 
 // 当前使用的环境
-const CURRENT = 'avd';
+const CURRENT = 'prod';
 
 export const API_BASE = CONFIGS[CURRENT].API_BASE;
 export const SOCKET_URL = CONFIGS[CURRENT].SOCKET_URL;
