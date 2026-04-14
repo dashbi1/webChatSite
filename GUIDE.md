@@ -4,21 +4,29 @@
 
 ## 部署模式选择
 
-本项目支持两种部署模式，首次部署前需要决定用哪种：
+本项目支持三种部署模式，首次部署前需要决定用哪种：
 
 | 模式 | 用户访问方式 | 何时选择 |
 |------|------------|----------|
 | **ip 模式** | `https://VPS_IP` | 没有域名，或者只是个人自用 |
-| **cloudflare 模式** | `https://app.yourdomain.com` | 有域名，想套 CF 做防护和加速 |
+| **cloudflare 模式**（单域名） | `https://yourdomain.com` | 有域名，但只用一个子域名 |
+| **cloudflare-split 模式**（双子域名） | 浏览器 `https://www.xxx`<br>APK 用 `https://app.xxx` | **推荐**：浏览器和 APK 走不同入口，前端运行时自动切换 |
 
-两种模式在 `deploy.conf` 里的 `DEPLOY_MODE` 一键切换，日后想换随时换。
+三种模式在 `deploy.conf` 里的 `DEPLOY_MODE` 一键切换，日后想换随时换。
+
+> **split 模式特点**：
+> - `www.yourdomain.com` → H5 + API + Socket.io + 管理后台（浏览器全家桶）
+> - `app.yourdomain.com` → 仅 API + Socket.io（APK 专用，其他路径 301 到 www）
+> - H5 里的 API 调用会**运行时判断**：浏览器同源调用 www/api（无 CORS），APK 走 app/api
+> - 浏览器用户 URL 栏永远是 `www.xxx`，品牌感更清爽
 
 ---
 
 ## 目录
 
 - [A. 部署（ip 模式）](#a-部署ip-模式)
-- [B. 部署（cloudflare 模式）](#b-部署cloudflare-模式)
+- [B. 部署（cloudflare 模式，单域名）](#b-部署cloudflare-模式)
+- [B2. 部署（cloudflare-split 模式，推荐）](#b2-部署cloudflare-split-模式推荐)
 - [C. Chrome 使用](#c-chrome-使用)
 - [D. 生成 Android APK](#d-生成-android-apk)
 - [E. 日后更新代码](#e-日后更新代码)
@@ -283,6 +291,163 @@ curl -k https://127.0.0.1/api/health --resolve 127.0.0.1:443:127.0.0.1 -H "Host:
 # 浏览器打开 https://app.yourdomain.com
 # 看到登录页说明成功
 ```
+
+---
+
+## B2. 部署（cloudflare-split 模式，推荐）
+
+### 架构
+
+```
+浏览器用户                   APK 用户                     代理用户
+   ↓                            ↓                             ↓
+https://www.xxx        https://app.xxx              ppy.xxx:30001
+   ↓ (CF 橙云)            ↓ (CF 橙云)                    ↓ (CF 灰云，直连)
+       Cloudflare 边缘节点                              VPS → Xray
+           ↓
+       VPS Nginx 443
+           │
+           ├── server www.xxx → H5 / API / Socket.io / 管理后台
+           └── server app.xxx → API / Socket.io（其他路径 301 到 www）
+```
+
+**运行时地址判断**（在 `client/src/config/env.js` 里已实现）：
+- APK 里的 H5（Capacitor 环境）→ 自动用 `app.xxx/api`
+- 浏览器里的 H5（访问 `www.xxx`）→ 自动用 `window.location.origin + '/api'`（即 `www.xxx/api`，同源无 CORS）
+
+### 前提
+
+- 已完成 A 节前 6 步（后端跑起来）
+- 有域名，NS 已经改到 Cloudflare
+- Cloudflare Origin Certificate **覆盖 www 和 app 两个子域名**（或用 `*.yourdomain.com` 通配符）
+
+### 第 1 步：Cloudflare DNS
+
+在 CF DNS 面板加三条 A 记录：
+
+| Name | Type | Content | Proxy |
+|------|------|---------|-------|
+| `www` | A | VPS_IP | 🟠 Proxied |
+| `app` | A | VPS_IP | 🟠 Proxied |
+| `ppy` | A | VPS_IP | ⚪ DNS only |
+
+`ppy.yourdomain.com` 是给 3x-ui 和代理节点直连用的。
+
+### 第 2 步：确认 Origin Certificate 覆盖两个子域名
+
+CF → SSL/TLS → Origin Server → Create Certificate，Hostnames 填：
+```
+www.yourdomain.com
+app.yourdomain.com
+```
+
+或者一劳永逸：`*.yourdomain.com`（签发时 15 年有效期）。
+
+把 Certificate 和 Private Key 存到 VPS：
+
+```bash
+sudo mkdir -p /etc/ssl/cloudflare
+sudo nano /etc/ssl/cloudflare/origin.pem   # 粘贴 Certificate
+sudo nano /etc/ssl/cloudflare/origin.key   # 粘贴 Private Key
+sudo chmod 600 /etc/ssl/cloudflare/origin.key
+```
+
+### 第 3 步：改前端 env.js（一次性，不用再改）
+
+**文件**：`client/src/config/env.js`
+
+```js
+prod: {
+  APK_API_HOST: 'https://app.yourdomain.com',        // APK 走这里
+  WEB_FALLBACK_HOST: 'https://www.yourdomain.com',   // 浏览器兜底
+},
+
+const CURRENT = 'prod';
+```
+
+这份 env.js **APK 和 H5 共用**，不用为了两种环境构建两次。
+
+### 第 4 步：本地构建 H5
+
+```bash
+cd client
+npm run build:h5
+```
+
+### 第 5 步：上传 H5 到 VPS
+
+```bash
+scp -r client/dist/build/h5/* user@VPS_IP:/opt/hit-circle/client/h5/
+```
+
+### 第 6 步：改 deploy.conf，切到 split 模式
+
+```bash
+ssh user@VPS_IP
+cd /opt/hit-circle/server/deploy
+nano deploy.conf
+```
+
+改这几处：
+
+```bash
+DEPLOY_MODE=cloudflare-split
+WEB_SERVER_NAME=www.yourdomain.com
+API_SERVER_NAME=app.yourdomain.com
+SSL_CERT_PATH=/etc/ssl/cloudflare/origin.pem
+SSL_KEY_PATH=/etc/ssl/cloudflare/origin.key
+# 其他字段保持不变
+```
+
+运行：
+
+```bash
+sudo ./setup-nginx.sh
+```
+
+脚本会：
+- 用 split 模板生成两个 server 块（www + app）
+- 自动启用 CF real_ip 配置
+- 测试 Nginx 配置 + reload
+- **不会碰 UFW 防火墙，也不会重启 x-ui 等其他服务**
+
+### 第 7 步：3x-ui 节点指向 ppy 子域名
+
+在 3x-ui 面板里：
+- 节点的 **SNI / 伪装域名** 改为 `ppy.yourdomain.com`
+- 客户端连接地址同步更新
+
+面板访问地址：`https://ppy.yourdomain.com:2219/uri`（不经过 Nginx）
+
+### 第 8 步：重新打包 APK
+
+```bash
+cd client
+# env.js 已经在第 3 步改好了，这里直接构建
+npm run build:h5
+npx cap sync android
+# Android Studio → Build APK → 装到手机
+```
+
+### 第 9 步：验证
+
+```bash
+# 浏览器访问 www（应看到 H5 登录页，地址栏保持 www.xxx）
+https://www.yourdomain.com
+
+# 浏览器访问 app（应被 301 跳转到 www）
+https://app.yourdomain.com
+
+# APK 打开后，打 login/发帖/收消息流程，后端日志应能看到请求来自 app.yourdomain.com
+```
+
+浏览器 DevTools Network 里你会看到：
+- 打开 www.xxx 后，API 请求全部发给 `/api/*`（同域）
+- 不会有跨域 OPTIONS 预检
+
+### 后续切换
+
+日后想换模式（比如改回单域名），只需改 `deploy.conf` 的 `DEPLOY_MODE`，重跑 `sudo ./setup-nginx.sh`。前端代码不用动 —— env.js 对 ip / 单域名 / split 三种情况都会用 `window.location.origin` 自适配（APK 始终走 APK_API_HOST）。
 
 ---
 

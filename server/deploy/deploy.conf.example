@@ -7,23 +7,32 @@
 #   3. 运行 sudo ./setup-nginx.sh 自动生成 Nginx 配置
 # ============================================================
 
-# 部署模式：ip | cloudflare
-#   ip          - 用户直接用 https://VPS_IP 访问（默认）
-#   cloudflare  - 用户通过域名经 Cloudflare 访问，CF 回源到本机
+# 部署模式：ip | cloudflare | cloudflare-split
+#   ip                - 用户直接用 https://VPS_IP 访问
+#   cloudflare        - 单域名经 Cloudflare（一个 server_name）
+#   cloudflare-split  - 双子域名：www 给浏览器 + app 给 APK（推荐）
 DEPLOY_MODE=ip
 
-# 服务器名（填 Nginx 的 server_name，对应用户访问用的 IP 或域名）
-#   - DEPLOY_MODE=ip         → 填 VPS 公网 IP，如 123.45.67.89
-#   - DEPLOY_MODE=cloudflare → 填 CF 上代理的子域名，如 app.yourdomain.com
+# ============ 单域名模式（ip / cloudflare） ============
+# SERVER_NAME：
+#   - DEPLOY_MODE=ip         → 填 VPS 公网 IP
+#   - DEPLOY_MODE=cloudflare → 填 CF 代理的域名
+#   - DEPLOY_MODE=cloudflare-split → 本字段忽略，改填下面两个
 SERVER_NAME=YOUR_VPS_IP
 
+# ============ 双子域名模式（cloudflare-split） ============
+# 浏览器入口（www.）：服务 H5 + API + Socket.io + 管理后台
+WEB_SERVER_NAME=www.yourdomain.com
+# APK 入口（app.）：服务 API + Socket.io（其他请求 301 到 www.）
+API_SERVER_NAME=app.yourdomain.com
+
+# ============ 通用配置 ============
 # 后端端口（与 server/.env 中的 PORT 一致）
 BACKEND_PORT=3000
 
-# SSL 证书路径（必填）
-#   - DEPLOY_MODE=ip         → 填你原来的 IP/域名证书（比如代理转发自动生成的那个）
-#   - DEPLOY_MODE=cloudflare → 填 Cloudflare Origin Certificate
-#     （在 CF 面板 → SSL/TLS → Origin Server 签一个 15 年证书）
+# SSL 证书路径
+#   - ip 模式          → 你原来的 IP/域名证书
+#   - cloudflare*      → Cloudflare Origin Certificate（需覆盖用到的子域名）
 SSL_CERT_PATH=/path/to/cert.pem
 SSL_KEY_PATH=/path/to/key.pem
 

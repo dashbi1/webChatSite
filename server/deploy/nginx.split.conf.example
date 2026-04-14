@@ -1,0 +1,192 @@
+# Nginx 配置 - 工大圈子（cloudflare-split 模式：www + app 双子域名）
+# 由 setup-nginx.sh 自动处理，以下占位符会被替换：
+#   WEB_SERVER_NAME_PLACEHOLDER → deploy.conf 中的 WEB_SERVER_NAME（如 www.xxx）
+#   API_SERVER_NAME_PLACEHOLDER → deploy.conf 中的 API_SERVER_NAME（如 app.xxx）
+#   SSL_CERT_PATH / SSL_KEY_PATH → 证书路径
+#   ADMIN_PATH  → 管理后台路径
+#   H5_ROOT_PATH → H5 产物目录
+
+upstream hit_circle_backend {
+    server 127.0.0.1:3000;
+    keepalive 64;
+}
+
+# HTTP 80 → HTTPS 443（两个子域名都重定向）
+server {
+    listen 80;
+    listen [::]:80;
+    server_name WEB_SERVER_NAME_PLACEHOLDER API_SERVER_NAME_PLACEHOLDER;
+
+    return 301 https://$host$request_uri;
+}
+
+# ============ www 子域名：全家桶（浏览器入口） ============
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name WEB_SERVER_NAME_PLACEHOLDER;
+
+    ssl_certificate     SSL_CERT_PATH;
+    ssl_certificate_key SSL_KEY_PATH;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    # #CF_REAL_IP_START
+    # set_real_ip_from 173.245.48.0/20;
+    # set_real_ip_from 103.21.244.0/22;
+    # set_real_ip_from 103.22.200.0/22;
+    # set_real_ip_from 103.31.4.0/22;
+    # set_real_ip_from 141.101.64.0/18;
+    # set_real_ip_from 108.162.192.0/18;
+    # set_real_ip_from 190.93.240.0/20;
+    # set_real_ip_from 188.114.96.0/20;
+    # set_real_ip_from 197.234.240.0/22;
+    # set_real_ip_from 198.41.128.0/17;
+    # set_real_ip_from 162.158.0.0/15;
+    # set_real_ip_from 104.16.0.0/13;
+    # set_real_ip_from 104.24.0.0/14;
+    # set_real_ip_from 172.64.0.0/13;
+    # set_real_ip_from 131.0.72.0/22;
+    # set_real_ip_from 2400:cb00::/32;
+    # set_real_ip_from 2606:4700::/32;
+    # set_real_ip_from 2803:f800::/32;
+    # set_real_ip_from 2405:b500::/32;
+    # set_real_ip_from 2405:8100::/32;
+    # set_real_ip_from 2a06:98c0::/29;
+    # set_real_ip_from 2c0f:f248::/32;
+    # real_ip_header CF-Connecting-IP;
+    # #CF_REAL_IP_END
+
+    access_log /var/log/nginx/hit-circle.web.access.log;
+    error_log  /var/log/nginx/hit-circle.web.error.log;
+
+    client_max_body_size 30M;
+
+    # H5 前端静态文件
+    location / {
+        root H5_ROOT_PATH;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # API（给 H5 自己用）
+    location /api/ {
+        proxy_pass http://hit_circle_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+
+    # WebSocket
+    location /socket.io/ {
+        proxy_pass http://hit_circle_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 86400;
+    }
+
+    # 管理后台
+    location /ADMIN_PATH/ {
+        proxy_pass http://hit_circle_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    location ~ /\.(env|git) {
+        deny all;
+        return 404;
+    }
+}
+
+# ============ app 子域名：只给 APK 的 API + WebSocket ============
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name API_SERVER_NAME_PLACEHOLDER;
+
+    ssl_certificate     SSL_CERT_PATH;
+    ssl_certificate_key SSL_KEY_PATH;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    # #CF_REAL_IP_START
+    # set_real_ip_from 173.245.48.0/20;
+    # set_real_ip_from 103.21.244.0/22;
+    # set_real_ip_from 103.22.200.0/22;
+    # set_real_ip_from 103.31.4.0/22;
+    # set_real_ip_from 141.101.64.0/18;
+    # set_real_ip_from 108.162.192.0/18;
+    # set_real_ip_from 190.93.240.0/20;
+    # set_real_ip_from 188.114.96.0/20;
+    # set_real_ip_from 197.234.240.0/22;
+    # set_real_ip_from 198.41.128.0/17;
+    # set_real_ip_from 162.158.0.0/15;
+    # set_real_ip_from 104.16.0.0/13;
+    # set_real_ip_from 104.24.0.0/14;
+    # set_real_ip_from 172.64.0.0/13;
+    # set_real_ip_from 131.0.72.0/22;
+    # set_real_ip_from 2400:cb00::/32;
+    # set_real_ip_from 2606:4700::/32;
+    # set_real_ip_from 2803:f800::/32;
+    # set_real_ip_from 2405:b500::/32;
+    # set_real_ip_from 2405:8100::/32;
+    # set_real_ip_from 2a06:98c0::/29;
+    # set_real_ip_from 2c0f:f248::/32;
+    # real_ip_header CF-Connecting-IP;
+    # #CF_REAL_IP_END
+
+    access_log /var/log/nginx/hit-circle.api.access.log;
+    error_log  /var/log/nginx/hit-circle.api.error.log;
+
+    client_max_body_size 30M;
+
+    location /api/ {
+        proxy_pass http://hit_circle_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+
+    location /socket.io/ {
+        proxy_pass http://hit_circle_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 86400;
+    }
+
+    # 浏览器访问 app. 根路径或其他未定义路径 → 301 到 www.
+    location / {
+        return 301 https://WEB_SERVER_NAME_PLACEHOLDER$request_uri;
+    }
+
+    location ~ /\.(env|git) {
+        deny all;
+        return 404;
+    }
+}

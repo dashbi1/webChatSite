@@ -7,6 +7,10 @@
 //   - 'prod'     : 生产环境（云 VPS）
 //
 // 打包发布 APK 前记得改成 'prod'
+//
+// prod 模式采用运行时判断：
+//   - APK（Capacitor）→ 走 APK_API_HOST（app.domain）
+//   - 浏览器          → 用 window.location.origin（www.domain，H5 部署在哪就用哪）
 
 const CONFIGS = {
   dev: {
@@ -23,15 +27,45 @@ const CONFIGS = {
     SOCKET_URL: 'http://192.168.1.100:3000',
   },
   prod: {
-    // ⚠️ 部署前必改：换成你的 VPS 公网 IP（走 Nginx 反向代理，无需端口号）
-    API_BASE: 'https://agent666.xyz/api',
-    SOCKET_URL: 'https://agent666.xyz',
+    // APK 专用：Capacitor 环境下一定走这个 host
+    APK_API_HOST: 'https://app.agent666.xyz',
+    // 浏览器兜底：运行时一般用 window.location.origin，这里仅作 SSR / 极端兜底
+    WEB_FALLBACK_HOST: 'https://www.agent666.xyz',
   },
 };
 
-// 当前使用的环境
 const CURRENT = 'prod';
 
-export const API_BASE = CONFIGS[CURRENT].API_BASE;
-export const SOCKET_URL = CONFIGS[CURRENT].SOCKET_URL;
+function resolveProdEndpoints() {
+  const { APK_API_HOST, WEB_FALLBACK_HOST } = CONFIGS.prod;
+
+  // 检测是否运行在 Capacitor（APK）里
+  const isCapacitor =
+    typeof window !== 'undefined' &&
+    (window.Capacitor !== undefined || window.capacitor !== undefined);
+
+  if (isCapacitor) {
+    return { API_BASE: APK_API_HOST + '/api', SOCKET_URL: APK_API_HOST };
+  }
+
+  // 浏览器：用当前页面的 origin，访问 www.domain 时就是 www.domain
+  if (typeof window !== 'undefined' && window.location && window.location.origin) {
+    const origin = window.location.origin;
+    return { API_BASE: origin + '/api', SOCKET_URL: origin };
+  }
+
+  // SSR / 极端兜底
+  return { API_BASE: WEB_FALLBACK_HOST + '/api', SOCKET_URL: WEB_FALLBACK_HOST };
+}
+
+function resolveEndpoints() {
+  if (CURRENT === 'prod') return resolveProdEndpoints();
+  const c = CONFIGS[CURRENT];
+  return { API_BASE: c.API_BASE, SOCKET_URL: c.SOCKET_URL };
+}
+
+const endpoints = resolveEndpoints();
+
+export const API_BASE = endpoints.API_BASE;
+export const SOCKET_URL = endpoints.SOCKET_URL;
 export const UPLOAD_URL = API_BASE.replace('/api', '/api/upload');
