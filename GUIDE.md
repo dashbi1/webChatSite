@@ -2,119 +2,108 @@
 
 ---
 
+## 部署模式选择
+
+本项目支持两种部署模式，首次部署前需要决定用哪种：
+
+| 模式 | 用户访问方式 | 何时选择 |
+|------|------------|----------|
+| **ip 模式** | `https://VPS_IP` | 没有域名，或者只是个人自用 |
+| **cloudflare 模式** | `https://app.yourdomain.com` | 有域名，想套 CF 做防护和加速 |
+
+两种模式在 `deploy.conf` 里的 `DEPLOY_MODE` 一键切换，日后想换随时换。
+
+---
+
 ## 目录
 
-- [A. VPS 部署（让 Chrome 和 APK 都能用）](#a-vps-部署)
-- [B. Chrome 浏览器使用](#b-chrome-浏览器使用)
-- [C. 生成 Android APK](#c-生成-android-apk)
-- [D. 日后更新代码](#d-日后更新代码)
-- [E. 故障排查](#e-故障排查)
+- [A. 部署（ip 模式）](#a-部署ip-模式)
+- [B. 部署（cloudflare 模式）](#b-部署cloudflare-模式)
+- [C. Chrome 使用](#c-chrome-使用)
+- [D. 生成 Android APK](#d-生成-android-apk)
+- [E. 日后更新代码](#e-日后更新代码)
+- [F. 在 ip 和 cloudflare 模式间切换](#f-在-ip-和-cloudflare-模式间切换)
+- [G. 故障排查](#g-故障排查)
 
 ---
 
-## A. VPS 部署
+## A. 部署（ip 模式）
 
-### 前提条件
-
-- 一台 Ubuntu 22.04 VPS，有公网 IP
-- VPS 上已有 HTTPS 证书（证书文件 + 私钥文件）
-- 本地已安装 Node.js、npm
-- 本地能 SSH 到 VPS
-
-### 总览
+### 架构
 
 ```
-你的电脑（本地）                        VPS（云服务器）
-┌─────────────────┐                ┌──────────────────────────────┐
-│ 1. 改 env.js    │                │  Nginx (443)                 │
-│ 2. npm run      │   scp 上传     │    ├── / → H5 静态文件        │
-│    build:h5     │ ──────────→    │    ├── /api → Node.js:3000   │
-│ 3. 上传到 VPS   │                │    └── /socket.io → WS:3000  │
-└─────────────────┘                │                              │
-                                   │  PM2 → Node.js (Express)     │
-                                   │    └── → Supabase Cloud      │
-                                   └──────────────────────────────┘
+Chrome / APK
+     ↓ HTTPS
+  VPS_IP
+     ↓
+  Nginx (443)
+     ├── /              → H5 静态文件
+     ├── /api/*         → Node.js:3000
+     ├── /socket.io/*   → Node.js:3000 (WebSocket)
+     └── /ADMIN_PATH/*  → Node.js:3000
+     ↓
+  Supabase Cloud
 ```
 
----
+### 前提
+
+- Ubuntu 22.04 VPS，有公网 IP
+- VPS 上已有 HTTPS 证书（IP 或域名证书都行）
+- 本地装了 Node.js、npm
+- 能 SSH 到 VPS
 
 ### 第 1 步：改前端配置
 
 **文件**：`client/src/config/env.js`
 
-改两处：
-
 ```js
-// 1. 把 prod 里的 YOUR_VPS_IP 换成你的 VPS 真实 IP
 prod: {
-  API_BASE: 'https://123.45.67.89/api',     // ← 改这里
-  SOCKET_URL: 'https://123.45.67.89',       // ← 改这里
+  API_BASE: 'https://123.45.67.89/api',     // 换成你的 VPS IP
+  SOCKET_URL: 'https://123.45.67.89',
 },
 
-// 2. 把 CURRENT 改为 'prod'
-const CURRENT = 'prod';                      // ← 改这里
+const CURRENT = 'prod';
 ```
 
----
-
-### 第 2 步：构建 H5 前端
+### 第 2 步：本地构建 H5
 
 ```bash
 cd client
 npm run build:h5
 ```
 
-成功后产物在 `client/dist/build/h5/` 目录。
-
----
-
 ### 第 3 步：上传到 VPS
 
-**方式 A：用部署脚本（推荐）**
+**方式 A：一键脚本**（推荐）
 
 ```bash
-# 1. 编辑脚本，填入 VPS_USER 和 VPS_IP
+# 编辑 deploy-to-vps.sh 头部，填 VPS_USER 和 VPS_IP
 nano deploy-to-vps.sh
 
-# 2. 运行（在 Git Bash 或 WSL 中）
 chmod +x deploy-to-vps.sh
 ./deploy-to-vps.sh
 ```
 
-脚本会自动构建 H5、上传后端 + 前端、在 VPS 上运行安装脚本。
-
-**方式 B：手动上传**
+**方式 B：手动 scp**
 
 ```bash
-# 在 VPS 上创建目录
 ssh user@VPS_IP "mkdir -p /opt/hit-circle/server /opt/hit-circle/client/h5"
-
-# 上传后端
 scp -r server/src server/admin server/deploy server/package.json server/package-lock.json server/.env.example user@VPS_IP:/opt/hit-circle/server/
-
-# 上传 H5 前端
 scp -r client/dist/build/h5/* user@VPS_IP:/opt/hit-circle/client/h5/
 ```
-
----
 
 ### 第 4 步：VPS 上运行安装脚本
 
 ```bash
 ssh user@VPS_IP
-
 cd /opt/hit-circle/server/deploy
 chmod +x install.sh setup-nginx.sh
 sudo ./install.sh
 ```
 
-这会自动安装 Node.js 20、PM2、Nginx、UFW 防火墙。
-
----
+安装 Node.js 20、PM2、Nginx、UFW。
 
 ### 第 5 步：配置后端 .env
-
-**文件**：VPS 上的 `/opt/hit-circle/server/.env`
 
 ```bash
 cd /opt/hit-circle/server
@@ -122,20 +111,7 @@ cp .env.example .env
 nano .env
 ```
 
-填入以下内容（从你本地的 `server/.env` 复制密钥）：
-
-```
-SUPABASE_URL=https://izhoqfrlilziwlgzcduq.supabase.co
-SUPABASE_ANON_KEY=你的anon_key
-SUPABASE_SERVICE_ROLE_KEY=你的service_role_key
-JWT_SECRET=一个长随机字符串
-PORT=3000
-ADMIN_PATH=console-k8m2x7
-```
-
-> `JWT_SECRET` 生成方法：`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
-
----
+填入 Supabase 密钥、JWT_SECRET、PORT=3000、ADMIN_PATH 等。
 
 ### 第 6 步：启动后端
 
@@ -143,23 +119,10 @@ ADMIN_PATH=console-k8m2x7
 cd /opt/hit-circle/server
 pm2 start deploy/ecosystem.config.js
 pm2 save
-pm2 startup
+pm2 startup  # 按提示执行输出的那行命令
 ```
 
-`pm2 startup` 会输出一行命令，**复制那行命令再执行一次**，这样 VPS 重启后后端会自动启动。
-
-验证后端：
-
-```bash
-curl http://localhost:3000/api/health
-# 应返回 {"status":"ok","time":"..."}
-```
-
----
-
-### 第 7 步：配置 Nginx
-
-**文件**：VPS 上的 `/opt/hit-circle/server/deploy/deploy.conf`
+### 第 7 步：配置 Nginx（ip 模式）
 
 ```bash
 cd /opt/hit-circle/server/deploy
@@ -167,118 +130,222 @@ cp deploy.conf.example deploy.conf
 nano deploy.conf
 ```
 
-需要改的项：
+**ip 模式必改字段**：
 
 ```bash
-VPS_IP=123.45.67.89              # ← 你的 VPS 公网 IP
-SSL_CERT_PATH=/path/to/cert.pem  # ← 你的 SSL 证书文件路径
-SSL_KEY_PATH=/path/to/key.pem    # ← 你的 SSL 私钥文件路径
+DEPLOY_MODE=ip
+SERVER_NAME=123.45.67.89          # ← 你的 VPS 公网 IP
+SSL_CERT_PATH=/path/to/cert.pem   # ← 证书文件
+SSL_KEY_PATH=/path/to/key.pem     # ← 私钥文件
 ```
 
-其余项保持默认即可。然后运行：
+运行：
 
 ```bash
 sudo ./setup-nginx.sh
 ```
 
-脚本会自动生成 Nginx 配置、启用站点、测试并重载。
+### 第 8 步：别忘了放行防火墙
 
----
-
-### 第 8 步：验证
+如果 VPS 上还跑着 3x-ui 等其他服务：
 
 ```bash
-# 在 VPS 上测试
+sudo ufw allow 2219/tcp    # 3x-ui 面板端口（按实际改）
+sudo ufw allow 30001/tcp   # 代理节点端口（按实际改）
+sudo ufw status
+```
+
+### 第 9 步：验证
+
+```bash
 curl -k https://127.0.0.1/api/health
+# 返回 {"status":"ok","time":"..."}
 
-# 在本地电脑浏览器打开
-https://你的VPS_IP
-```
-
-看到登录页面就说明部署成功了。
-
----
-
-### 快速回顾：你改了什么、运行了什么
-
-| 步骤 | 在哪里 | 改了什么 / 运行什么 |
-|------|--------|---------------------|
-| 1 | 本地 | 改 `client/src/config/env.js`：prod IP + CURRENT='prod' |
-| 2 | 本地 | 运行 `cd client && npm run build:h5` |
-| 3 | 本地 | 运行 `./deploy-to-vps.sh` 或手动 scp |
-| 4 | VPS | 运行 `sudo ./install.sh` |
-| 5 | VPS | 改 `/opt/hit-circle/server/.env`：填 Supabase 密钥 |
-| 6 | VPS | 运行 `pm2 start deploy/ecosystem.config.js && pm2 save && pm2 startup` |
-| 7 | VPS | 改 `deploy.conf`：填 VPS_IP + SSL 路径，然后 `sudo ./setup-nginx.sh` |
-| 8 | 浏览器 | 打开 `https://VPS_IP` 验证 |
-
----
-
-## B. Chrome 浏览器使用
-
-部署完成后：
-
-1. 打开 Chrome，地址栏输入 `https://你的VPS_IP`
-2. 如果浏览器提示证书不受信任，点"高级" → "继续前往"
-3. 看到登录页，用已有账号登录或注册新账号
-4. 所有功能正常：发帖、聊天、添加好友、通知、管理后台
-
-**管理后台**：`https://你的VPS_IP/console-k8m2x7`（管理员账号 13800000001 / test123）
-
-**添加到桌面快捷方式**：Chrome 右上角三点菜单 → "更多工具" → "创建快捷方式" → 勾选"在窗口中打开"
-
----
-
-## C. 生成 Android APK
-
-### 前提条件
-
-- 已安装 Android Studio
-- 项目的 `dev/android` 分支已合并到 main（或切换到该分支）
-
-### 总览
-
-```
-client/ 目录下操作
-  1. 改 env.js（同 VPS 部署一样）
-  2. npm run build:h5
-  3. npx cap sync android
-  4. Android Studio 打开 client/android/ → Build APK
+# 浏览器打开 https://你的VPS_IP
 ```
 
 ---
 
-### 第 1 步：确认分支
+## B. 部署（cloudflare 模式）
 
-APK 构建依赖 Capacitor，相关文件在 `dev/android` 分支。确保你在正确的分支：
+### 架构
+
+```
+Chrome / APK
+     ↓ HTTPS
+app.yourdomain.com
+     ↓
+  Cloudflare 边缘节点（防 DDoS、隐藏源 IP）
+     ↓ HTTPS（CF Origin 证书）
+  VPS → Nginx (443)
+     ├── /              → H5 静态文件
+     ├── /api/*         → Node.js:3000
+     └── /socket.io/*   → Node.js:3000
+
+另一路（不经 CF）：
+代理客户端 / 3x-ui 面板
+     ↓
+proxy.yourdomain.com (灰色云 = DNS only)
+     ↓
+  VPS → Xray/3x-ui
+```
+
+### 前提
+
+- 已经完成 **ip 模式**的前 6 步（后端跑起来）
+- 有自己的域名
+- 域名的 NS 已经改成 Cloudflare 给的
+
+### 第 1 步：Cloudflare DNS 配置
+
+登录 CF → 你的域名 → DNS → 加两条 A 记录：
+
+| Name | Type | Content | Proxy |
+|------|------|---------|-------|
+| `app` | A | VPS_IP | 🟠 Proxied |
+| `proxy` | A | VPS_IP | ⚪ DNS only |
+
+- `app.yourdomain.com` 走 CF 代理，用户看不到 VPS 真实 IP
+- `proxy.yourdomain.com` 直连 VPS，用于 3x-ui 面板和代理节点
+
+### 第 2 步：Cloudflare SSL 配置
+
+CF → SSL/TLS → Overview：
+- 模式选 **Full (strict)**
+
+CF → SSL/TLS → Origin Server：
+- 点 **Create Certificate**
+- Hostnames 写：`app.yourdomain.com`（或 `*.yourdomain.com`）
+- Validity：15 years
+- 生成后会给你 **Certificate**（公钥）和 **Private Key**（私钥）两块内容
+
+### 第 3 步：把 Origin Certificate 存到 VPS
 
 ```bash
-# 方式 A：切换到 dev/android 分支
-git checkout dev/android
-
-# 方式 B：如果已合并到 main，直接在 main 上操作
+ssh user@VPS_IP
+sudo mkdir -p /etc/ssl/cloudflare
+sudo nano /etc/ssl/cloudflare/app.pem        # 粘贴 Certificate 内容
+sudo nano /etc/ssl/cloudflare/app.key        # 粘贴 Private Key 内容
+sudo chmod 600 /etc/ssl/cloudflare/app.key
 ```
 
----
-
-### 第 2 步：改前端配置
+### 第 4 步：改前端配置
 
 **文件**：`client/src/config/env.js`
 
-和 VPS 部署一样，把 prod 配置改成你的 VPS IP，CURRENT 改为 `'prod'`。
-
 ```js
 prod: {
-  API_BASE: 'https://123.45.67.89/api',
-  SOCKET_URL: 'https://123.45.67.89',
+  API_BASE: 'https://app.yourdomain.com/api',
+  SOCKET_URL: 'https://app.yourdomain.com',
 },
 
 const CURRENT = 'prod';
 ```
 
+然后 `cd client && npm run build:h5`，把新的 H5 产物 scp 到 VPS。
+
+### 第 5 步：改 deploy.conf，切到 cloudflare 模式
+
+```bash
+cd /opt/hit-circle/server/deploy
+nano deploy.conf
+```
+
+**改这几处**：
+
+```bash
+DEPLOY_MODE=cloudflare
+SERVER_NAME=app.yourdomain.com                          # ← 域名
+SSL_CERT_PATH=/etc/ssl/cloudflare/app.pem               # ← CF Origin 证书
+SSL_KEY_PATH=/etc/ssl/cloudflare/app.key                # ← CF Origin 私钥
+```
+
+运行：
+
+```bash
+sudo ./setup-nginx.sh
+```
+
+脚本会自动启用 CF 的 `real_ip` 配置（从 `CF-Connecting-IP` 头里拿真实客户端 IP），否则日志里全是 CF 的 IP。
+
+### 第 6 步：3x-ui 面板 / 代理节点改用 proxy 子域名
+
+在 3x-ui 面板里，把每个节点的 **SNI / 连接地址** 从原来的 IP 或旧域名改成 `proxy.yourdomain.com`。客户端配置同步更新。
+
+面板访问地址也改成 `https://proxy.yourdomain.com:2219/uri`。
+
+### 第 7 步：验证
+
+```bash
+# VPS 上测试 CF 回源这段
+curl -k https://127.0.0.1/api/health --resolve 127.0.0.1:443:127.0.0.1 -H "Host: app.yourdomain.com"
+
+# 浏览器打开 https://app.yourdomain.com
+# 看到登录页说明成功
+```
+
 ---
 
-### 第 3 步：构建 H5 并同步到 Android 项目
+## C. Chrome 使用
+
+### ip 模式
+
+1. 地址栏输入 `https://VPS_IP`
+2. 第一次会提示证书不受信任，点"高级" → "继续前往"
+3. 登录使用
+
+### cloudflare 模式
+
+1. 地址栏输入 `https://app.yourdomain.com`
+2. CF 的证书浏览器原生信任，不会有警告
+3. 登录使用
+
+### 管理后台
+
+- ip 模式：`https://VPS_IP/console-k8m2x7`
+- cloudflare 模式：`https://app.yourdomain.com/console-k8m2x7`
+
+管理员账号：13800000001 / test123
+
+---
+
+## D. 生成 Android APK
+
+### 流程总览
+
+```
+  client/ 目录下
+    1. 改 env.js（填 prod 地址，IP 或域名）
+    2. npm run build:h5
+    3. npx cap sync android
+    4. Android Studio 打开 client/android/ → Build APK
+```
+
+### 第 1 步：确认分支
+
+APK 构建依赖 Capacitor，文件在 `dev/android` 分支（或已合并到 main）：
+
+```bash
+git checkout dev/android   # 或者就在 main
+```
+
+### 第 2 步：改 env.js
+
+**文件**：`client/src/config/env.js`
+
+- **ip 模式**：填 `https://你的VPS_IP/api`
+- **cloudflare 模式**：填 `https://app.yourdomain.com/api`
+
+```js
+prod: {
+  API_BASE: 'https://app.yourdomain.com/api',
+  SOCKET_URL: 'https://app.yourdomain.com',
+},
+
+const CURRENT = 'prod';
+```
+
+### 第 3 步：构建 H5 并同步到 Android
 
 ```bash
 cd client
@@ -286,94 +353,140 @@ npm run build:h5
 npx cap sync android
 ```
 
-`cap sync` 会把 `dist/build/h5/` 的内容复制到 `client/android/app/src/main/assets/public/`。
-
----
-
-### 第 4 步：用 Android Studio 构建 APK
+### 第 4 步：Android Studio 构建 APK
 
 1. 打开 Android Studio
 2. `File → Open` → 选择 `client/android` 目录
-3. 等 Gradle Sync 完成（右下角进度条跑完）
-4. 菜单 `Build → Build Bundle(s) / APK(s) → Build APK(s)`
-5. 构建完成后，右下角弹出 `locate` 链接，点击打开 APK 所在文件夹
+3. 等 Gradle Sync 完成
+4. `Build → Build Bundle(s) / APK(s) → Build APK(s)`
+5. 完成后点右下角 `locate` 打开 APK 文件夹
 
 **APK 位置**：`client/android/app/build/outputs/apk/debug/app-debug.apk`
 
----
-
 ### 第 5 步：安装到手机
 
-把 `app-debug.apk` 传到手机，安装即可：
-- USB 线连电脑：`adb install app-debug.apk`
-- 或发微信/QQ 给自己，手机上点击安装
-- 手机需开启"允许安装未知来源应用"
+- USB 线：`adb install app-debug.apk`
+- 或发微信 / QQ 给自己，点开安装
+- 手机需要开启"允许安装未知来源应用"
+
+### 后端地址变了怎么办？
+
+只要改了 `env.js` 里的 prod 地址，APK 就必须重新打包：
+
+```bash
+cd client
+npm run build:h5
+npx cap sync android
+# Android Studio 重新 Build APK
+# 手机上卸载旧版，装新版
+```
 
 ---
 
-### 快速回顾：你改了什么、运行了什么
-
-| 步骤 | 目录 | 操作 |
-|------|------|------|
-| 1 | 项目根目录 | `git checkout dev/android`（如需要） |
-| 2 | `client/src/config/` | 改 `env.js`：prod IP + CURRENT='prod' |
-| 3 | `client/` | 运行 `npm run build:h5` |
-| 4 | `client/` | 运行 `npx cap sync android` |
-| 5 | Android Studio | 打开 `client/android/`，Build → Build APK |
-| 6 | 手机 | 安装 `app-debug.apk` |
-
----
-
-### VPS IP 变了怎么办？
-
-1. 改 `client/src/config/env.js` 中 prod 的 IP
-2. 重新执行第 3~6 步（构建 → sync → Build APK → 安装）
-
----
-
-## D. 日后更新代码
+## E. 日后更新代码
 
 ### 只改了后端
 
 ```bash
-# 上传新的后端代码到 VPS
 scp -r server/src/* user@VPS_IP:/opt/hit-circle/server/src/
-
-# 在 VPS 上重启
 ssh user@VPS_IP "cd /opt/hit-circle/server && npm install --production && pm2 restart hit-circle"
 ```
 
 ### 只改了前端（Chrome 网页版）
 
 ```bash
-# 本地构建
 cd client && npm run build:h5
-
-# 上传到 VPS（Nginx 直接生效，不用重启）
-scp -r client/dist/build/h5/* user@VPS_IP:/opt/hit-circle/client/h5/
+scp -r dist/build/h5/* user@VPS_IP:/opt/hit-circle/client/h5/
+# Nginx 直接生效，不用重启
 ```
 
-### 改了前端（需要更新 APK）
+### 前端改动需要同步到 APK
 
 ```bash
 cd client
 npm run build:h5
 npx cap sync android
-# 然后 Android Studio Build APK，重新安装到手机
+# Android Studio Build APK → 重新装到手机
 ```
 
 ---
 
-## E. 故障排查
+## F. 在 ip 和 cloudflare 模式间切换
 
-| 问题 | 检查方法 |
-|------|----------|
-| Chrome 打不开 | VPS 上 `sudo systemctl status nginx` |
-| 页面白屏 / 404 | H5 文件是否上传到了正确目录：`ls /opt/hit-circle/client/h5/index.html` |
-| 登录失败 / API 报错 | VPS 上 `pm2 logs hit-circle` 看后端日志 |
-| 实时聊天不工作 | VPS 上 `pm2 logs hit-circle` 看 socket 相关日志 |
-| 上传图片失败 | 检查 Supabase Storage 配额，和 Nginx 的 `client_max_body_size` |
-| APK 打不开 / 白屏 | `env.js` 的 IP 是否正确，VPS 后端是否在跑 |
-| APK 网络错误 | HTTPS 证书问题，或手机网络不通 VPS |
-| Nginx 启动失败 | `sudo nginx -t` 查看配置错误 |
-| PM2 没有自动启动 | 重新执行 `pm2 save && pm2 startup` |
+切换非常简单，**不用重装任何东西**，只改配置 + 重新生成 Nginx 即可。
+
+### ip → cloudflare
+
+1. 完成 [B 节第 1~3 步]：CF DNS + Origin 证书
+2. 改 `client/src/config/env.js` 的 prod 地址为域名 → 重新 build:h5 → 上传 H5
+3. 改 `deploy.conf`：`DEPLOY_MODE=cloudflare`，`SERVER_NAME=域名`，`SSL_CERT_PATH` 换成 CF 证书
+4. `sudo ./setup-nginx.sh`
+5. 重新打包 APK 装到手机
+
+### cloudflare → ip
+
+1. 改 `client/src/config/env.js` 的 prod 地址为 IP → 重新 build:h5 → 上传
+2. 改 `deploy.conf`：`DEPLOY_MODE=ip`，`SERVER_NAME=IP`，`SSL_CERT_PATH` 换回原 IP 证书
+3. `sudo ./setup-nginx.sh`
+4. 重新打包 APK
+
+### 配置项一览
+
+| 字段 | ip 模式 | cloudflare 模式 |
+|------|---------|-----------------|
+| `DEPLOY_MODE` | `ip` | `cloudflare` |
+| `SERVER_NAME` | VPS IP | CF 代理的域名 |
+| `SSL_CERT_PATH` | IP / 旧域名证书 | CF Origin Certificate |
+| `SSL_KEY_PATH` | 对应私钥 | CF Origin Private Key |
+
+`env.js` 里的 `API_BASE` 和 `SOCKET_URL` 也要相应换成 IP 或域名。
+
+---
+
+## G. 故障排查
+
+### Nginx / 网站
+
+| 问题 | 检查 |
+|------|------|
+| 打不开 | `sudo systemctl status nginx`、`sudo nginx -t` |
+| 白屏 / 404 | `ls /opt/hit-circle/client/h5/index.html` |
+| 502 Bad Gateway | 后端没跑：`pm2 status` |
+
+### API / 后端
+
+| 问题 | 检查 |
+|------|------|
+| 登录失败 | `pm2 logs hit-circle` |
+| 聊天连不上 | `pm2 logs hit-circle` 看 socket 日志 |
+| 上传失败 | `client_max_body_size` + Supabase 配额 |
+
+### Cloudflare 模式
+
+| 问题 | 检查 |
+|------|------|
+| Error 521 | VPS 的 443 端口没响应，检查 Nginx 状态 |
+| Error 525 | CF Origin 证书没装对，或 SSL 模式没设 Full (strict) |
+| Error 526 | Origin 证书过期 / 域名不匹配 |
+| 日志里全是 CF 的 IP | `real_ip` 没生效，确认 `DEPLOY_MODE=cloudflare` 再跑一次 `setup-nginx.sh` |
+
+### APK
+
+| 问题 | 检查 |
+|------|------|
+| 白屏 / 连不上 | `env.js` 中 prod 地址是否正确，VPS 后端是否在跑 |
+| 网络错误 | HTTPS 证书问题，或手机网络不通 VPS |
+
+### 代理服务冲突
+
+| 问题 | 检查 |
+|------|------|
+| 3x-ui 面板打不开 | `sudo ufw status` 确认面板端口放行；`systemctl status x-ui` |
+| 代理节点不工作 | 节点端口防火墙放行；3x-ui 面板里节点配置的 SNI / 地址 |
+
+### 切回来检查（重要）
+
+每次跑完 `setup-nginx.sh` 后务必：
+1. `sudo nginx -t`（脚本也会自动跑）
+2. 浏览器实际访问一次，看首页能不能加载
+3. 登录 + 发一条消息，看 WebSocket 工作正常

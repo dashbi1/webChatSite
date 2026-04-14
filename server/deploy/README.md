@@ -104,9 +104,10 @@ curl -k https://VPS_IP/api/health
 
 | 配置项 | 文件 | 说明 |
 |--------|------|------|
-| `VPS_IP` | `deploy.conf` / `env.js` | VPS 公网 IP |
+| `DEPLOY_MODE` | `deploy.conf` | `ip` 或 `cloudflare`，决定是否启用 CF real_ip |
+| `SERVER_NAME` | `deploy.conf` | ip 模式填 VPS IP；cloudflare 模式填域名 |
 | `BACKEND_PORT` | `deploy.conf` / `.env` | 后端端口，默认 3000 |
-| `SSL_CERT_PATH` | `deploy.conf` | HTTPS 证书路径 |
+| `SSL_CERT_PATH` | `deploy.conf` | HTTPS 证书路径（CF 模式用 Origin Certificate） |
 | `SSL_KEY_PATH` | `deploy.conf` | HTTPS 私钥路径 |
 | `ADMIN_PATH` | `deploy.conf` / `.env` | 管理后台 URL 路径 |
 | `H5_ROOT_PATH` | `deploy.conf` | H5 静态文件目录 |
@@ -115,6 +116,8 @@ curl -k https://VPS_IP/api/health
 | `SUPABASE_ANON_KEY` | `.env` | Supabase 匿名密钥 |
 | `SUPABASE_SERVICE_ROLE_KEY` | `.env` | Supabase 服务密钥 |
 | `JWT_SECRET` | `.env` | JWT 签名密钥 |
+
+完整部署教程（ip 模式、cloudflare 模式、APK 构建）见项目根目录的 `GUIDE.md`。
 
 ---
 
