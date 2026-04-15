@@ -8,7 +8,7 @@
         <image class="avatar" :src="user.avatar_url || '/static/default-avatar.png'" />
         <text class="nickname">{{ user.nickname || '未设置昵称' }}</text>
         <text class="meta" v-if="user.college || user.grade">{{ user.college || '' }} {{ user.grade || '' }}</text>
-        <text class="phone">{{ user.phone }}</text>
+        <text class="phone">{{ user.email }}</text>
       </view>
     </view>
 

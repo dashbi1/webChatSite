@@ -9,7 +9,8 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- ============================================
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    phone VARCHAR(20) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    phone VARCHAR(20),
     password_hash VARCHAR(255) NOT NULL,
     nickname VARCHAR(50),
     avatar_url TEXT,
@@ -21,8 +22,25 @@ CREATE TABLE users (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_phone ON users(phone);
 CREATE INDEX idx_users_nickname ON users(nickname);
+
+-- ============================================
+-- 邮箱验证码表
+-- ============================================
+CREATE TABLE email_verifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email VARCHAR(255) NOT NULL,
+    code VARCHAR(6) NOT NULL,
+    purpose VARCHAR(10) NOT NULL CHECK (purpose IN ('register', 'reset')),
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_email_verifications_lookup
+    ON email_verifications(email, purpose, created_at DESC);
 
 -- ============================================
 -- 帖子表

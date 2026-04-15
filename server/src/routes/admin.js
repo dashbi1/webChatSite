@@ -7,19 +7,19 @@ const router = express.Router();
 
 router.use(authMiddleware, adminMiddleware);
 
-// 用户列表（支持手机号/昵称搜索）
+// 用户列表（支持邮箱/昵称搜索）
 router.get('/users', async (req, res) => {
   const { page = 1, limit = 20, q } = req.query;
   const offset = (page - 1) * limit;
 
   let query = supabase
     .from('users')
-    .select('id, phone, nickname, avatar_url, college, role, status, created_at')
+    .select('id, email, phone, nickname, avatar_url, college, role, status, created_at')
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
 
   if (q) {
-    query = query.or(`nickname.ilike.%${q}%,phone.ilike.%${q}%`);
+    query = query.or(`nickname.ilike.%${q}%,email.ilike.%${q}%`);
   }
 
   const { data, error } = await query;
@@ -98,7 +98,7 @@ router.get('/posts', async (req, res) => {
   if (authorIds.length > 0) {
     const { data: authors } = await supabase
       .from('users')
-      .select('id, nickname, phone')
+      .select('id, nickname, email')
       .in('id', authorIds);
     authorMap = new Map((authors || []).map(a => [a.id, a]));
   }
@@ -149,7 +149,7 @@ router.get('/reports', async (req, res) => {
   if (reporterIds.length > 0) {
     const { data: reporters } = await supabase
       .from('users')
-      .select('id, nickname, phone')
+      .select('id, nickname, email')
       .in('id', reporterIds);
     reporterMap = new Map((reporters || []).map(u => [u.id, u]));
   }

@@ -16,12 +16,11 @@
 
       <view class="form-card">
         <view class="input-group">
-          <text class="input-icon">&#x1F4F1;</text>
+          <text class="input-icon">&#x2709;</text>
           <input
-            v-model="phone"
-            type="number"
-            placeholder="请输入手机号"
-            maxlength="11"
+            v-model="email"
+            type="text"
+            placeholder="请输入邮箱"
             class="input"
           />
         </view>
@@ -37,6 +36,10 @@
         <button class="btn-primary" :disabled="loading" @click="handleLogin">
           {{ loading ? '登录中...' : '登录' }}
         </button>
+
+        <view class="forgot-row">
+          <text class="link" @click="goForgot">忘记密码？</text>
+        </view>
       </view>
 
       <view class="footer">
@@ -50,18 +53,18 @@
 import { ref } from 'vue';
 import { login } from '../../api/auth';
 
-const phone = ref('');
+const email = ref('');
 const password = ref('');
 const loading = ref(false);
 
 async function handleLogin() {
-  if (!phone.value || !password.value) {
+  if (!email.value || !password.value) {
     uni.showToast({ title: '请填写完整信息', icon: 'none' });
     return;
   }
   loading.value = true;
   try {
-    const res = await login({ phone: phone.value, password: password.value });
+    const res = await login({ email: email.value, password: password.value });
     uni.setStorageSync('token', res.data.token);
     uni.setStorageSync('user', JSON.stringify(res.data.user));
     uni.switchTab({ url: '/pages/index/index' });
@@ -73,6 +76,10 @@ async function handleLogin() {
 
 function goRegister() {
   uni.navigateTo({ url: '/pages/register/index' });
+}
+
+function goForgot() {
+  uni.navigateTo({ url: '/pages/forgot-password/index' });
 }
 </script>
 
@@ -129,6 +136,8 @@ function goRegister() {
   box-shadow: 0 8rpx 24rpx rgba(74, 144, 217, 0.35);
 }
 .btn-primary[disabled] { opacity: 0.5; box-shadow: none; }
+
+.forgot-row { text-align: right; margin-top: 20rpx; }
 
 .footer { text-align: center; margin-top: 48rpx; }
 .link { font-size: 26rpx; color: #999; }

@@ -13,6 +13,10 @@
       "style": { "navigationBarTitleText": "注册" }
     },
     {
+      "path": "pages/forgot-password/index",
+      "style": { "navigationBarTitleText": "重置密码" }
+    },
+    {
       "path": "pages/publish/index",
       "style": { "navigationBarTitleText": "发布动态" }
     },

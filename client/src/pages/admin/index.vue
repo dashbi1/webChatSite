@@ -6,7 +6,7 @@
     <view v-for="u in users" :key="u.id" class="user-item">
       <image class="avatar" :src="u.avatar_url || '/static/default-avatar.png'" />
       <view class="info">
-        <text class="nick">{{ u.nickname }} ({{ u.phone }})</text>
+        <text class="nick">{{ u.nickname }} ({{ u.email }})</text>
         <text class="status" :class="u.status">{{ u.status === 'active' ? '正常' : '已封禁' }}</text>
       </view>
       <button

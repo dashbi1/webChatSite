@@ -1,19 +1,19 @@
 <template>
-  <view class="register-page">
+  <view class="forgot-page">
     <view class="bg-deco">
       <view class="circle c1" />
     </view>
 
     <view class="content">
       <view class="header">
-        <text class="title">创建账号</text>
-        <text class="subtitle">加入工大圈子，认识更多校友</text>
+        <text class="title">重置密码</text>
+        <text class="subtitle">通过邮箱验证码设置新密码</text>
       </view>
 
       <view class="form-card">
         <view class="input-group">
           <text class="input-icon">&#x2709;</text>
-          <input v-model="email" type="text" placeholder="邮箱" class="input" />
+          <input v-model="email" type="text" placeholder="请输入邮箱" class="input" />
         </view>
 
         <view class="code-row">
@@ -28,21 +28,16 @@
 
         <view class="input-group">
           <text class="input-icon">&#x1F512;</text>
-          <input v-model="password" type="password" placeholder="设置密码（至少6位）" class="input" />
+          <input v-model="newPassword" type="password" placeholder="设置新密码（至少6位）" class="input" />
         </view>
 
-        <view class="input-group">
-          <text class="input-icon">&#x1F464;</text>
-          <input v-model="nickname" placeholder="昵称（选填）" maxlength="20" class="input" />
-        </view>
-
-        <button class="btn-primary" :disabled="loading" @click="handleRegister">
-          {{ loading ? '注册中...' : '注册' }}
+        <button class="btn-primary" :disabled="loading" @click="handleReset">
+          {{ loading ? '提交中...' : '重置密码' }}
         </button>
       </view>
 
       <view class="footer">
-        <text class="link" @click="goLogin">已有账号？<text class="link-bold">去登录</text></text>
+        <text class="link" @click="goLogin">想起密码了？<text class="link-bold">返回登录</text></text>
       </view>
     </view>
   </view>
@@ -50,14 +45,13 @@
 
 <script setup>
 import { ref } from 'vue';
-import { sendCode, register } from '../../api/auth';
+import { sendCode, resetPassword } from '../../api/auth';
 
 const EMAIL_REGEX = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 
 const email = ref('');
 const code = ref('');
-const password = ref('');
-const nickname = ref('');
+const newPassword = ref('');
 const loading = ref(false);
 const sending = ref(false);
 const countdown = ref(0);
@@ -70,7 +64,7 @@ async function handleSendCode() {
   }
   sending.value = true;
   try {
-    await sendCode(email.value, 'register');
+    await sendCode(email.value, 'reset');
     uni.showToast({ title: '验证码已发送到邮箱', icon: 'none' });
     countdown.value = 60;
     timer = setInterval(() => {
@@ -83,8 +77,8 @@ async function handleSendCode() {
   }
 }
 
-async function handleRegister() {
-  if (!email.value || !code.value || !password.value) {
+async function handleReset() {
+  if (!email.value || !code.value || !newPassword.value) {
     uni.showToast({ title: '请填写完整信息', icon: 'none' });
     return;
   }
@@ -92,21 +86,21 @@ async function handleRegister() {
     uni.showToast({ title: '邮箱格式不正确', icon: 'none' });
     return;
   }
-  if (password.value.length < 6) {
+  if (newPassword.value.length < 6) {
     uni.showToast({ title: '密码至少6位', icon: 'none' });
     return;
   }
   loading.value = true;
   try {
-    const res = await register({
+    await resetPassword({
       email: email.value,
       code: code.value,
-      password: password.value,
-      nickname: nickname.value || undefined,
+      newPassword: newPassword.value,
     });
-    uni.setStorageSync('token', res.data.token);
-    uni.setStorageSync('user', JSON.stringify(res.data.user));
-    uni.switchTab({ url: '/pages/index/index' });
+    uni.showToast({ title: '重置成功，请用新密码登录', icon: 'success' });
+    setTimeout(() => {
+      uni.reLaunch({ url: '/pages/login/index' });
+    }, 1200);
   } catch {} finally { loading.value = false; }
 }
 
@@ -114,10 +108,10 @@ function goLogin() { uni.navigateBack(); }
 </script>
 
 <style scoped>
-.register-page { min-height: 100vh; background: #f7f8fa; position: relative; overflow: hidden; }
+.forgot-page { min-height: 100vh; background: #f7f8fa; position: relative; overflow: hidden; }
 .bg-deco { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; }
 .circle { position: absolute; border-radius: 50%; }
-.c1 { width: 400rpx; height: 400rpx; background: rgba(74, 144, 217, 0.06); top: -100rpx; left: -100rpx; }
+.c1 { width: 400rpx; height: 400rpx; background: rgba(74, 144, 217, 0.06); top: -100rpx; right: -100rpx; }
 .content { position: relative; z-index: 1; padding: 0 48rpx; }
 .header { padding-top: 120rpx; margin-bottom: 48rpx; }
 .title { display: block; font-size: 44rpx; font-weight: 700; color: #1a1a2e; }

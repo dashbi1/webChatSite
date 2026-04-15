@@ -8,7 +8,7 @@ const router = express.Router();
 router.get('/me', authMiddleware, async (req, res) => {
   const { data: user, error } = await supabase
     .from('users')
-    .select('id, phone, nickname, avatar_url, college, grade, role, status, created_at')
+    .select('id, email, phone, nickname, avatar_url, college, grade, role, status, created_at')
     .eq('id', req.user.id)
     .single();
 
@@ -42,7 +42,7 @@ router.put('/me', authMiddleware, async (req, res) => {
     .from('users')
     .update(updates)
     .eq('id', req.user.id)
-    .select('id, phone, nickname, avatar_url, college, grade, role, status')
+    .select('id, email, phone, nickname, avatar_url, college, grade, role, status')
     .single();
 
   if (error) {
