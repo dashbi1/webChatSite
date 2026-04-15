@@ -4,6 +4,18 @@ const jwt = require('jsonwebtoken');
 const supabase = require('../config/supabase');
 const { sendVerificationEmail } = require('../services/emailService');
 const { createCode, verifyCode } = require('../services/verificationService');
+const {
+  rateLimitSendCode,
+  rateLimitRegister,
+  rateLimitResetPassword,
+} = require('../middleware/rateLimit');
+const { verifyTurnstile } = require('../middleware/turnstile');
+const {
+  isWhitelistedDomain,
+} = require('../services/whitelist/emailDomains');
+const {
+  isDisposable,
+} = require('../services/disposableEmails/loader');
 
 const router = express.Router();
 
@@ -14,8 +26,26 @@ function validateEmail(email) {
   return typeof email === 'string' && EMAIL_REGEX.test(email);
 }
 
-// 发送验证码
-router.post('/send-code', async (req, res) => {
+// 一次性邮箱拦截：白名单邮箱永远放行，即便在 disposable 库里也放行。
+function rejectDisposable(req, res, next) {
+  const email = req.body && req.body.email;
+  if (!email) return next();
+  if (isWhitelistedDomain(email)) return next();
+  if (isDisposable(email)) {
+    return res
+      .status(400)
+      .json({ success: false, error: '请使用常用邮箱' });
+  }
+  next();
+}
+
+// 发送验证码（限流 → Turnstile → 一次性邮箱黑名单 → 业务）
+router.post(
+  '/send-code',
+  rateLimitSendCode(),
+  verifyTurnstile,
+  rejectDisposable,
+  async (req, res) => {
   const { email, purpose } = req.body;
 
   if (!validateEmail(email)) {
@@ -58,10 +88,11 @@ router.post('/send-code', async (req, res) => {
   }
 
   res.json({ success: true, message: '验证码已发送到你的邮箱' });
-});
+  }
+);
 
-// 注册
-router.post('/register', async (req, res) => {
+// 注册（限流：同 IP 每天最多 3 个账号）
+router.post('/register', rateLimitRegister(), async (req, res) => {
   const { email, code, password, nickname } = req.body;
 
   if (!validateEmail(email)) {
@@ -157,7 +188,8 @@ router.post('/login', async (req, res) => {
 });
 
 // 重置密码（通过邮箱验证码）
-router.post('/reset-password', async (req, res) => {
+// 挂 IP 级限流防止暴力枚举 6 位验证码
+router.post('/reset-password', rateLimitResetPassword(), async (req, res) => {
   const { email, code, newPassword } = req.body;
 
   if (!validateEmail(email)) {

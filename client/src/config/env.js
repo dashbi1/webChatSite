@@ -69,3 +69,17 @@ const endpoints = resolveEndpoints();
 export const API_BASE = endpoints.API_BASE;
 export const SOCKET_URL = endpoints.SOCKET_URL;
 export const UPLOAD_URL = API_BASE.replace('/api', '/api/upload');
+
+// ============================================================
+// Cloudflare Turnstile 站点密钥（人机验证）
+// 详见 docs/anti-abuse/08-deployment.md 第 A.2 节
+//
+// 开发 / 测试可使用官方 "永远通过" 的 key：
+//   1x00000000000000000000AA
+//
+// 上线前必须替换成在 Cloudflare 后台创建 Site 后拿到的正式 Site Key，
+// 并在该 Site 的 Hostname 列表里加上：
+//   - www.yourdomain.com / app.yourdomain.com（生产域名）
+//   - localhost（Capacitor Android WebView 默认 origin）
+// ============================================================
+export const TURNSTILE_SITE_KEY = '1x00000000000000000000AA';

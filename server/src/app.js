@@ -20,6 +20,10 @@ const path = require('path');
 
 const app = express();
 
+// trust proxy：Nginx + Cloudflare 链路下让 req.ip 正确解析 X-Forwarded-For
+// 搭配 src/utils/ip.js 的 getClientIp 使用
+app.set('trust proxy', 1);
+
 // 中间件
 app.use(cors());
 app.use(express.json());
@@ -58,6 +62,16 @@ if (require.main === module) {
   });
   setupSocket(io);
   setIO(io);
+
+  // 反滥用：启动时加载一次性邮箱黑名单 + 调度 cron
+  const {
+    loadFromDb: loadDisposable,
+  } = require('./services/disposableEmails/loader');
+  const { startCron } = require('./cron');
+  loadDisposable().catch((e) =>
+    console.warn('[startup] disposable load failed:', e && e.message)
+  );
+  startCron();
 
   const PORT = process.env.PORT || 3000;
   server.listen(PORT, () => {

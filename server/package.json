@@ -10,10 +10,14 @@
     "test:phase1": "jest tests/phase1 --runInBand --forceExit",
     "test:phase2": "jest tests/phase2 --runInBand --forceExit",
     "test:phase3": "jest tests/phase3 --runInBand --forceExit",
-    "test:phase4": "jest tests/phase4 --runInBand --forceExit"
+    "test:phase4": "jest tests/phase4 --runInBand --forceExit",
+    "test:abuse": "jest tests/anti-abuse --runInBand --forceExit",
+    "test:abuse:phase1": "jest tests/anti-abuse/phase1 --runInBand --forceExit"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.0",
+    "@upstash/redis": "^1.34.0",
+    "axios": "^1.7.9",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.0",
@@ -21,6 +25,7 @@
     "https-proxy-agent": "^9.0.0",
     "jsonwebtoken": "^9.0.0",
     "multer": "^2.1.1",
+    "node-cron": "^3.0.3",
     "socket.io": "^4.8.0",
     "undici": "^8.0.2"
   },

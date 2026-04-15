@@ -21,10 +21,17 @@
             <text class="input-icon">&#x1F511;</text>
             <input v-model="code" type="number" placeholder="验证码" maxlength="6" class="input" />
           </view>
-          <button class="btn-code" :disabled="countdown > 0 || sending" @click="handleSendCode">
+          <button
+            class="btn-code"
+            :disabled="countdown > 0 || sending || !turnstileToken"
+            @click="handleSendCode"
+          >
             {{ countdown > 0 ? `${countdown}s` : (sending ? '发送中...' : '获取验证码') }}
           </button>
         </view>
+
+        <!-- Cloudflare Turnstile 人机验证 -->
+        <TurnstileWidget ref="turnstile" @success="onTurnstileSuccess" @expired="onTurnstileExpired" />
 
         <view class="input-group">
           <text class="input-icon">&#x1F512;</text>
@@ -46,6 +53,7 @@
 <script setup>
 import { ref } from 'vue';
 import { sendCode, resetPassword } from '../../api/auth';
+import TurnstileWidget from '../../components/TurnstileWidget.vue';
 
 const EMAIL_REGEX = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 
@@ -55,16 +63,29 @@ const newPassword = ref('');
 const loading = ref(false);
 const sending = ref(false);
 const countdown = ref(0);
+const turnstileToken = ref('');
+const turnstile = ref(null);
 let timer = null;
+
+function onTurnstileSuccess(token) {
+  turnstileToken.value = token;
+}
+function onTurnstileExpired() {
+  turnstileToken.value = '';
+}
 
 async function handleSendCode() {
   if (!EMAIL_REGEX.test(email.value)) {
     uni.showToast({ title: '请输入正确的邮箱', icon: 'none' });
     return;
   }
+  if (!turnstileToken.value) {
+    uni.showToast({ title: '请先完成人机验证', icon: 'none' });
+    return;
+  }
   sending.value = true;
   try {
-    await sendCode(email.value, 'reset');
+    await sendCode(email.value, 'reset', turnstileToken.value);
     uni.showToast({ title: '验证码已发送到邮箱', icon: 'none' });
     countdown.value = 60;
     timer = setInterval(() => {
@@ -74,6 +95,8 @@ async function handleSendCode() {
   } catch (e) {
   } finally {
     sending.value = false;
+    turnstileToken.value = '';
+    if (turnstile.value) turnstile.value.reset();
   }
 }
 
