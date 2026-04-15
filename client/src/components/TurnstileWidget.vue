@@ -12,7 +12,8 @@
 <template>
   <!-- #ifdef H5 -->
   <view class="ts-wrap">
-    <view ref="container" class="ts-container" />
+    <!-- 用原生 div 而不是 uni-app <view>，避免 CF Turnstile 对自定义元素 (uni-view) 的类型校验失败 -->
+    <div :id="containerId" class="ts-container" />
     <view v-if="status === 'loading'" class="ts-hint">人机验证加载中...</view>
     <view v-else-if="status === 'error'" class="ts-hint ts-err">
       人机验证加载失败，<text class="ts-retry" @click="reload">点此重试</text>
@@ -61,6 +62,9 @@ export default {
     return {
       status: 'loading', // loading | ready | error
       widgetId: null,
+      // 每个实例独立 id，支持多 widget 共存
+      containerId:
+        'turnstile-' + Math.random().toString(36).slice(2, 10),
     };
   },
   mounted() {
@@ -79,9 +83,12 @@ export default {
       try {
         await loadScript();
         if (!window.turnstile) throw new Error('turnstile not available');
-        const el = this.$refs.container;
-        if (!el) return;
-        this.widgetId = window.turnstile.render(el, {
+        // 等一个微任务让 DOM 元素真正挂上（避免 getElementById 拿不到）
+        await new Promise((r) => setTimeout(r, 0));
+        const el = document.getElementById(this.containerId);
+        if (!el) throw new Error('container element not found: #' + this.containerId);
+        // 传**字符串选择器**而非 element；CF Turnstile 对自定义元素做 instanceof 校验会失败
+        this.widgetId = window.turnstile.render('#' + this.containerId, {
           sitekey: TURNSTILE_SITE_KEY,
           callback: (token) => {
             this.$emit('success', token);

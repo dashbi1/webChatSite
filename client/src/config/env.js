@@ -82,4 +82,4 @@ export const UPLOAD_URL = API_BASE.replace('/api', '/api/upload');
 //   - www.yourdomain.com / app.yourdomain.com（生产域名）
 //   - localhost（Capacitor Android WebView 默认 origin）
 // ============================================================
-export const TURNSTILE_SITE_KEY = '1x00000000000000000000AA';
+export const TURNSTILE_SITE_KEY = '0x4AAAAAAC9_hp4_Goo-F3Dq';
