@@ -12,7 +12,8 @@
     "test:phase3": "jest tests/phase3 --runInBand --forceExit",
     "test:phase4": "jest tests/phase4 --runInBand --forceExit",
     "test:abuse": "jest tests/anti-abuse --runInBand --forceExit",
-    "test:abuse:phase1": "jest tests/anti-abuse/phase1 --runInBand --forceExit"
+    "test:abuse:phase1": "jest tests/anti-abuse/phase1 --runInBand --forceExit",
+    "test:abuse:phase2": "jest tests/anti-abuse/phase2 --runInBand --forceExit"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.0",
