@@ -22,14 +22,36 @@
 $ErrorActionPreference = 'Stop'
 
 # ============ 在这里填你的配置 ============
-$VpsUser   = 'root'             # 改成你的普通用户名（如 ubuntu / deploy）；保持 root 也行
+$VpsUser   = 'niubi74618'             # 改成你的普通用户名（如 ubuntu / deploy）；保持 root 也行
 $VpsIp     = '104.198.91.201'
 $VpsDir    = '/opt/hit-circle'
+
+# SSH 私钥路径（可选）
+#   - 留空：走默认（~/.ssh/id_rsa / id_ed25519 / ssh-agent / ~/.ssh/config 里的配置）
+#   - 填路径：强制指定，所有 ssh/scp 自动加 -i <key>
+#   - 路径可以用 $env:USERPROFILE 表示 C:\Users\你
+#   - 如路径带空格，注意用单引号包起来
+# 示例：
+#   $SshKey = "$env:USERPROFILE\.ssh\id_ed25519_vps"
+#   $SshKey = 'D:\keys\my-vps.pem'
+$SshKey    = ''
 # ==========================================
 
 # 判断是否需要 sudo（非 root 用户时）
 $Sudo = ''
 if ($VpsUser -ne 'root') { $Sudo = 'sudo' }
+
+# 构造 ssh/scp 的公共参数（key + 保活 + 非交互友好）
+$SshOpts = @()
+if ($SshKey -ne '') {
+  if (-not (Test-Path $SshKey)) {
+    Write-Host "[错误] 找不到 SSH 私钥: $SshKey" -ForegroundColor Red
+    exit 1
+  }
+  $SshOpts += '-i', $SshKey
+  # 避免某些 key 被 agent 覆盖
+  $SshOpts += '-o', 'IdentitiesOnly=yes'
+}
 
 # 远端暂存目录（普通用户可写）
 $ts = [int][double]::Parse((Get-Date -UFormat %s))
@@ -98,7 +120,7 @@ Write-Host '[完成] H5 构建成功'
 # ---------- 步骤 2：远端创建暂存目录 ----------
 Write-Host ''
 Write-Host '[2/5] 在 VPS /tmp 下创建暂存目录...'
-& ssh "$VpsUser@$VpsIp" "mkdir -p $RemoteStage/server $RemoteStage/client"
+& ssh @SshOpts "$VpsUser@$VpsIp" "mkdir -p $RemoteStage/server $RemoteStage/client"
 if ($LASTEXITCODE -ne 0) { Write-Host '[错误] SSH 到 VPS 失败，请检查 ssh 密钥 / VPS 可达性' -ForegroundColor Red; exit 1 }
 
 # ---------- 步骤 3：上传文件 ----------
@@ -106,7 +128,7 @@ Write-Host ''
 Write-Host '[3/5] 上传文件到 VPS 暂存目录...'
 
 function ScpUpload([string]$Local, [string]$Remote) {
-  & scp -r $Local "$VpsUser@$VpsIp`:$Remote"
+  & scp @SshOpts -r $Local "$VpsUser@$VpsIp`:$Remote"
   if ($LASTEXITCODE -ne 0) { throw "scp 失败: $Local -> $Remote" }
 }
 
@@ -163,7 +185,7 @@ echo 'sync done'
 "@
 
 # -t 分配 tty 方便 sudo 交互输入密码
-& ssh -t "$VpsUser@$VpsIp" $remoteCmd
+& ssh @SshOpts -t "$VpsUser@$VpsIp" $remoteCmd
 if ($LASTEXITCODE -ne 0) {
   Write-Host '[错误] 远端同步失败（sudo 密码错误？或 rsync 未装？）' -ForegroundColor Red
   exit 1
@@ -174,7 +196,7 @@ Write-Host '[完成] 文件同步成功'
 Write-Host ''
 $runInstall = Read-Host '[5/5] 是否在 VPS 上运行 install.sh 安装 Node/PM2/Nginx？(首次部署才需要) (y/N)'
 if ($runInstall -match '^[Yy]') {
-  & ssh -t "$VpsUser@$VpsIp" "$Sudo $VpsDir/server/deploy/install.sh"
+  & ssh @SshOpts -t "$VpsUser@$VpsIp" "$Sudo $VpsDir/server/deploy/install.sh"
   if ($LASTEXITCODE -ne 0) {
     Write-Host '[错误] install.sh 执行失败' -ForegroundColor Red
     exit 1

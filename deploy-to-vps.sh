@@ -14,15 +14,33 @@
 set -e
 
 # ============ 在这里填你的配置 ============
-VPS_USER="root"           # 改成你的普通用户（如 ubuntu / deploy）。也可以保持 root
+VPS_USER="niubi74618"           # 改成你的普通用户（如 ubuntu / deploy）。也可以保持 root
 VPS_IP="104.198.91.201"
 VPS_DIR="/opt/hit-circle"
+
+# SSH 私钥路径（可选）
+#   - 留空：走默认（~/.ssh/id_rsa / id_ed25519 / ssh-agent / ~/.ssh/config）
+#   - 填路径：强制指定，所有 ssh/scp 自动加 -i <key>
+# 示例：
+#   SSH_KEY="$HOME/.ssh/id_ed25519_vps"
+#   SSH_KEY="/d/keys/my-vps.pem"
+SSH_KEY=""
 # ==========================================
 
 # 判断是否需要 sudo（非 root 用户时才用）
 SUDO=""
 if [ "$VPS_USER" != "root" ]; then
   SUDO="sudo"
+fi
+
+# 构造 ssh/scp 的公共参数
+SSH_OPTS=()
+if [ -n "$SSH_KEY" ]; then
+  if [ ! -f "$SSH_KEY" ]; then
+    echo "[错误] 找不到 SSH 私钥: $SSH_KEY"
+    exit 1
+  fi
+  SSH_OPTS=(-i "$SSH_KEY" -o IdentitiesOnly=yes)
 fi
 
 # 远端上传暂存目录（普通用户可写）
@@ -69,35 +87,35 @@ echo "[完成] H5 构建成功"
 # 步骤 2：在 VPS 上创建暂存目录（普通用户可写的 /tmp 下）
 echo ""
 echo "[2/5] 在 VPS /tmp 下创建暂存目录..."
-ssh "$VPS_USER@$VPS_IP" "mkdir -p $REMOTE_STAGE/server $REMOTE_STAGE/client/h5"
+ssh "${SSH_OPTS[@]}" "$VPS_USER@$VPS_IP" "mkdir -p $REMOTE_STAGE/server $REMOTE_STAGE/client/h5"
 
 # 步骤 3：上传文件到暂存目录
 echo ""
 echo "[3/5] 上传文件到 VPS 暂存目录..."
 echo "  上传后端..."
-scp -r "$SCRIPT_DIR/server/src" "$VPS_USER@$VPS_IP:$REMOTE_STAGE/server/"
-scp -r "$SCRIPT_DIR/server/admin" "$VPS_USER@$VPS_IP:$REMOTE_STAGE/server/"
-scp -r "$SCRIPT_DIR/server/deploy" "$VPS_USER@$VPS_IP:$REMOTE_STAGE/server/"
-scp "$SCRIPT_DIR/server/package.json" "$VPS_USER@$VPS_IP:$REMOTE_STAGE/server/"
-scp "$SCRIPT_DIR/server/package-lock.json" "$VPS_USER@$VPS_IP:$REMOTE_STAGE/server/"
-scp "$SCRIPT_DIR/server/.env.example" "$VPS_USER@$VPS_IP:$REMOTE_STAGE/server/"
+scp "${SSH_OPTS[@]}" -r "$SCRIPT_DIR/server/src" "$VPS_USER@$VPS_IP:$REMOTE_STAGE/server/"
+scp "${SSH_OPTS[@]}" -r "$SCRIPT_DIR/server/admin" "$VPS_USER@$VPS_IP:$REMOTE_STAGE/server/"
+scp "${SSH_OPTS[@]}" -r "$SCRIPT_DIR/server/deploy" "$VPS_USER@$VPS_IP:$REMOTE_STAGE/server/"
+scp "${SSH_OPTS[@]}" "$SCRIPT_DIR/server/package.json" "$VPS_USER@$VPS_IP:$REMOTE_STAGE/server/"
+scp "${SSH_OPTS[@]}" "$SCRIPT_DIR/server/package-lock.json" "$VPS_USER@$VPS_IP:$REMOTE_STAGE/server/"
+scp "${SSH_OPTS[@]}" "$SCRIPT_DIR/server/.env.example" "$VPS_USER@$VPS_IP:$REMOTE_STAGE/server/"
 
 # 如果有 jest.config.js / jest.setup.js 也上传（Phase 1 引入）
 if [ -f "$SCRIPT_DIR/server/jest.config.js" ]; then
-  scp "$SCRIPT_DIR/server/jest.config.js" "$VPS_USER@$VPS_IP:$REMOTE_STAGE/server/"
+  scp "${SSH_OPTS[@]}" "$SCRIPT_DIR/server/jest.config.js" "$VPS_USER@$VPS_IP:$REMOTE_STAGE/server/"
 fi
 if [ -f "$SCRIPT_DIR/server/jest.setup.js" ]; then
-  scp "$SCRIPT_DIR/server/jest.setup.js" "$VPS_USER@$VPS_IP:$REMOTE_STAGE/server/"
+  scp "${SSH_OPTS[@]}" "$SCRIPT_DIR/server/jest.setup.js" "$VPS_USER@$VPS_IP:$REMOTE_STAGE/server/"
 fi
 
 # 如果有反滥用测试目录，也上传（方便 VPS 上跑 npm run test:abuse:phase1）
 if [ -d "$SCRIPT_DIR/server/tests/anti-abuse" ]; then
-  ssh "$VPS_USER@$VPS_IP" "mkdir -p $REMOTE_STAGE/server/tests"
-  scp -r "$SCRIPT_DIR/server/tests/anti-abuse" "$VPS_USER@$VPS_IP:$REMOTE_STAGE/server/tests/"
+  ssh "${SSH_OPTS[@]}" "$VPS_USER@$VPS_IP" "mkdir -p $REMOTE_STAGE/server/tests"
+  scp "${SSH_OPTS[@]}" -r "$SCRIPT_DIR/server/tests/anti-abuse" "$VPS_USER@$VPS_IP:$REMOTE_STAGE/server/tests/"
 fi
 
 echo "  上传 H5 前端..."
-scp -r "$SCRIPT_DIR/client/dist/build/h5/"* "$VPS_USER@$VPS_IP:$REMOTE_STAGE/client/h5/"
+scp "${SSH_OPTS[@]}" -r "$SCRIPT_DIR/client/dist/build/h5/"* "$VPS_USER@$VPS_IP:$REMOTE_STAGE/client/h5/"
 echo "[完成] 文件上传成功"
 
 # 步骤 4：sudo 把文件从暂存目录同步到 /opt
@@ -109,7 +127,7 @@ if [ -n "$SUDO" ]; then
   echo "       ↓ 接下来可能会提示输入 sudo 密码"
 fi
 
-ssh -t "$VPS_USER@$VPS_IP" "
+ssh "${SSH_OPTS[@]}" -t "$VPS_USER@$VPS_IP" "
   set -e
   $SUDO mkdir -p $VPS_DIR/server $VPS_DIR/client/h5
 
@@ -135,7 +153,7 @@ echo "      （如果已经装过，可以跳过，等会手动 pm2 restart hit-
 read -p "运行 install.sh？(y/N) " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-  ssh -t "$VPS_USER@$VPS_IP" "$SUDO $VPS_DIR/server/deploy/install.sh"
+  ssh "${SSH_OPTS[@]}" -t "$VPS_USER@$VPS_IP" "$SUDO $VPS_DIR/server/deploy/install.sh"
   echo "[完成] 安装脚本执行成功"
 else
   echo "[跳过] 未运行 install.sh"
