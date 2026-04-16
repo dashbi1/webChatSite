@@ -1,5 +1,5 @@
-// Phase 3 降权执行核心：根据 risk_score + observe/enforce 开关 + 白名单
-// 计算目标状态并更新 users 表。供 triggerAsync 或 admin 手动调用。
+// Phase 3 降权执行核心：根据 risk_score + observe/enforce 开关
+// 计算目标状态并更新 users 表。由 scoreStore 异步触发 或 admin 手动调用。
 //
 // 四档（见 docs/anti-abuse/00-overview.md#C）：
 //   < 40：normal
@@ -7,11 +7,12 @@
 //   70-85：frozen（restricted_until 7 天）
 //   >= 85：banned（status='banned'）
 //
-// 白名单邮箱豁免：score >= 85 且 isWhitelistedDomain → 不自动封，
-//   写 account_clusters pending 供管理员审核。
+// 【Phase 3 Fix Pack】白名单邮箱不再豁免自动封禁：
+//   白名单定义是"注册时少加初始怀疑分（COLD_EMAIL_DOMAIN 规则不触发）"，
+//   不是"永不封禁"。批量注册 / 机房 IP 等积累到 85+ 同样自动封。
+//   额外处理：白名单被封时推送一行 account_clusters pending 供 admin 审计。
 //
-// observe 模式下：不修改 users 状态字段，只返回"如果 enforce 应达到的级别"
-//   供 triggerAsync 在 risk_events 表里记录。
+// observe 模式下：不修改 users 状态字段，只返回"如果 enforce 应达到的级别"。
 
 const supabase = require('../../config/supabase');
 const { isWhitelistedDomain } = require('../whitelist/emailDomains');
@@ -53,11 +54,25 @@ async function applyEnforcement(user, options = {}) {
     restricted_until: null,
   };
   let newStatus = user.status;
+  // whitelistShielded 保留返回但语义改：仅表示"封禁同时额外推送 admin pending"
   let whitelistShielded = false;
 
   if (level === 'banned') {
+    // 无差别封禁（白名单不再豁免）
+    newStatus = 'banned';
+    try {
+      await createBanRecord({
+        targetType: 'user',
+        targetId: user.id,
+        banType: 'auto_score',
+        reason: options.reason || `风险分 ${score} >= 85 自动封禁`,
+        createdBy: options.operatorId || null,
+      });
+    } catch (e) {
+      console.warn('[applyEnforcement] createBanRecord failed:', e && e.message);
+    }
+    // 白名单邮箱额外推送一条 account_clusters pending 给 admin 审计可见
     if (isWhitelist) {
-      // 白名单永不自动封，推送到账号簇 pending 给管理员审核
       whitelistShielded = true;
       try {
         await supabase.from('account_clusters').insert({
@@ -65,7 +80,7 @@ async function applyEnforcement(user, options = {}) {
           member_ids: [user.id],
           suspicion_score: Math.min(score, 100),
           evidence: {
-            reason: 'whitelist_email_blocked_autoban',
+            reason: 'whitelist_email_autobanned_notice',
             email_domain: (user.email || '').split('@')[1] || '',
             score,
           },
@@ -73,19 +88,6 @@ async function applyEnforcement(user, options = {}) {
         });
       } catch (e) {
         console.warn('[applyEnforcement] whitelist cluster insert failed:', e && e.message);
-      }
-    } else {
-      newStatus = 'banned';
-      try {
-        await createBanRecord({
-          targetType: 'user',
-          targetId: user.id,
-          banType: 'auto_score',
-          reason: options.reason || `风险分 ${score} >= 85 自动封禁`,
-          createdBy: options.operatorId || null,
-        });
-      } catch (e) {
-        console.warn('[applyEnforcement] createBanRecord failed:', e && e.message);
       }
     }
   } else if (level === 'frozen') {

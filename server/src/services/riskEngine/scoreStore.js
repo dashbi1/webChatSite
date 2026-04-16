@@ -74,6 +74,11 @@ async function recordEvent({
     return { recorded: true, appliedDelta: 0, mode };
   }
 
+  // Phase 3 Fix Pack：分数变化后异步触发 applyEnforcement 闭环
+  //   （update 成功 + mode=enforce 才触发；observe 模式永远不触发）
+  //   fire-and-forget，失败只打日志不阻塞主流程
+  triggerApplyEnforcement(userId);
+
   return {
     recorded: true,
     appliedDelta: next - current,
@@ -81,6 +86,28 @@ async function recordEvent({
     newScore: next,
     previousScore: current,
   };
+}
+
+// 使用 setImmediate + lazy require 避免 scoreStore ↔ applyEnforcement 循环依赖
+// （applyEnforcement 内部调 createBanRecord，createBanRecord 不依赖 scoreStore）
+function triggerApplyEnforcement(userId) {
+  setImmediate(async () => {
+    try {
+      const { applyEnforcement } = require('../enforcement/applyEnforcement');
+      const { data: fresh, error } = await supabase
+        .from('users')
+        .select('id, email, status, risk_score, restricted_until, is_shadow_banned, shadow_ban_until')
+        .eq('id', userId)
+        .maybeSingle();
+      if (error || !fresh) {
+        console.warn('[scoreStore] fetch for enforcement failed:', error && error.message);
+        return;
+      }
+      await applyEnforcement(fresh);
+    } catch (err) {
+      console.warn('[scoreStore] applyEnforcement async failed:', err && err.message);
+    }
+  });
 }
 
 module.exports = { recordEvent };

@@ -106,39 +106,45 @@ describe('applyEnforcement (enforce mode)', () => {
     expect(diffMs).toBeLessThan(8 * 86400 * 1000);
   });
 
-  test('score=90 非白名单：status=banned + createBanRecord 被调用', async () => {
-    const { applyEnforcement, updateCalls, banRecordCalls } = setup();
+  test('score=90 非白名单：status=banned + createBanRecord 被调用 + 不推 pending', async () => {
+    const { applyEnforcement, updateCalls, insertCalls, banRecordCalls } = setup();
     const user = { id: 'u4', email: 'spammer@random.xyz', risk_score: 90, status: 'active' };
     const result = await applyEnforcement(user);
     expect(result.level).toBe('banned');
     expect(result.enforced).toBe(true);
+    expect(result.whitelistShielded).toBe(false);
     expect(banRecordCalls.length).toBe(1);
     expect(banRecordCalls[0].targetType).toBe('user');
     expect(banRecordCalls[0].banType).toBe('auto_score');
     expect(updateCalls[0].patch.status).toBe('banned');
+    expect(insertCalls.length).toBe(0); // 非白名单不写 pending
   });
 
-  test('score=90 白名单邮箱：不自动封，写 account_clusters pending', async () => {
+  test('score=90 白名单邮箱：照常封禁 + 额外推 account_clusters pending', async () => {
     const { applyEnforcement, updateCalls, insertCalls, banRecordCalls } = setup();
     const user = { id: 'u5', email: 'student@hit.edu.cn', risk_score: 90, status: 'active' };
     const result = await applyEnforcement(user);
     expect(result.level).toBe('banned');
-    expect(result.enforced).toBe(false);
-    expect(result.whitelistShielded).toBe(true);
-    expect(banRecordCalls.length).toBe(0);
+    expect(result.enforced).toBe(true);          // 照常 ban
+    expect(result.whitelistShielded).toBe(true); // 额外标识
+    expect(banRecordCalls.length).toBe(1);       // 仍然写 ban_records
+    expect(banRecordCalls[0].targetType).toBe('user');
+    expect(updateCalls[0].patch.status).toBe('banned');
+    // 额外推了一行 pending
     expect(insertCalls.length).toBe(1);
     expect(insertCalls[0].table).toBe('account_clusters');
     expect(insertCalls[0].row.status).toBe('pending');
-    // users 表 status 不应被改成 banned
-    expect(updateCalls[0].patch.status).toBeUndefined();
+    expect(insertCalls[0].row.evidence.reason).toBe('whitelist_email_autobanned_notice');
   });
 
-  test('gmail 白名单域名同样豁免', async () => {
-    const { applyEnforcement, banRecordCalls } = setup();
+  test('gmail 白名单域名同样：封 + 推 pending', async () => {
+    const { applyEnforcement, banRecordCalls, insertCalls } = setup();
     const user = { id: 'u6', email: 'a@gmail.com', risk_score: 100, status: 'active' };
     const result = await applyEnforcement(user);
+    expect(result.enforced).toBe(true);
     expect(result.whitelistShielded).toBe(true);
-    expect(banRecordCalls.length).toBe(0);
+    expect(banRecordCalls.length).toBe(1);
+    expect(insertCalls.length).toBe(1);
   });
 });
 

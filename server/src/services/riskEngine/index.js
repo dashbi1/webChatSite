@@ -12,6 +12,7 @@
 
 const { getRules } = require('./ruleCache');
 const { recordEvent } = require('./scoreStore');
+const { computeAppliedDelta } = require('./dedupDecay');
 
 // rules 目录下每个文件导出 { evaluate(args) → {triggered, evidence?} | null }
 // args: { user, rule, action, req, context }
@@ -43,6 +44,7 @@ async function evaluate({ user, action, req, context = {} }) {
       if (res && res.triggered) {
         triggered.push({
           code: rule.code,
+          rule, // 保留完整 rule 给 dedupDecay 读 params
           score: rule.score,
           evidence: res.evidence || {},
         });
@@ -53,15 +55,25 @@ async function evaluate({ user, action, req, context = {} }) {
     }
   }
 
-  // 把所有触发事件写入 risk_events；recordEvent 内部按 mode 决定是否更新 users.risk_score
+  // Phase 3 Fix Pack：写入前先过 dedup/decay
+  // returns 0 → 跳过不写（不污染 risk_events）
   const writeResults = [];
   for (const t of triggered) {
+    const appliedDelta = await computeAppliedDelta(user.id, t.rule);
+    if (appliedDelta === 0) {
+      continue; // dedup 命中，跳过
+    }
     const r = await recordEvent({
       userId: user.id,
       ruleCode: t.code,
-      scoreDelta: t.score,
+      scoreDelta: appliedDelta,
       reason: 'rule_trigger',
-      evidence: t.evidence,
+      evidence: {
+        ...t.evidence,
+        ...(appliedDelta !== t.score
+          ? { base_score: t.score, applied_delta: appliedDelta }
+          : {}),
+      },
     });
     writeResults.push(r);
   }
