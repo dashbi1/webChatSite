@@ -6,6 +6,7 @@ const {
   updateDisposableDomains,
 } = require('../services/disposableEmails/updateFromGithub');
 const { updateAccountCounts } = require('./updateAccountCounts');
+const { runIpBurstCheck } = require('./ipBurstCheck');
 
 let started = false;
 const tasks = [];
@@ -38,6 +39,9 @@ function startCron() {
 
   // 每 30 分钟更新 fingerprints/ip_records.account_count
   scheduleTask('*/30 * * * *', 'updateAccountCounts', updateAccountCounts);
+
+  // Phase 3：每 10 分钟检测 /24 IP 段注册密集度，命中则临时封 15 分钟
+  scheduleTask('*/10 * * * *', 'ipBurstCheck', runIpBurstCheck);
 
   console.log(`[cron] ${tasks.length} tasks scheduled`);
 }

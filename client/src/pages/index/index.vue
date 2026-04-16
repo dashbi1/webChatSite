@@ -1,5 +1,6 @@
 <template>
   <view class="feed-page">
+    <RiskBanner />
     <view class="top-bar">
       <text class="top-title">工大圈子</text>
       <view class="top-actions">
@@ -72,6 +73,7 @@ import NotificationBell from '../../components/NotificationBell.vue';
 import PostCard from '../../components/PostCard.vue';
 import SkeletonPost from '../../components/SkeletonPost.vue';
 import FriendPicker from '../../components/FriendPicker.vue';
+import RiskBanner from '../../components/RiskBanner.vue';
 import { getSocket } from '../../utils/socket';
 
 const posts = ref([]);

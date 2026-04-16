@@ -67,6 +67,10 @@
     {
       "path": "pages/change-password/index",
       "style": { "navigationBarTitleText": "修改密码" }
+    },
+    {
+      "path": "pages/appeals/index",
+      "style": { "navigationBarTitleText": "账号申诉" }
     }
   ],
   "globalStyle": {

@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const supabase = require('../config/supabase');
 const { createNotification } = require('../utils/notify');
+const { getSystemConfig } = require('../services/config/systemConfig');
 
 // 检查好友关系
 async function areFriends(userA, userB) {
@@ -23,6 +24,19 @@ async function isBanned(userId) {
     .eq('id', userId)
     .single();
   return data?.status === 'banned';
+}
+
+// Phase 3：检查用户是否被冻结（restricted_until 未过期 且 enforce 模式）
+async function isFrozenNow(userId) {
+  const { data: user } = await supabase
+    .from('users')
+    .select('restricted_until')
+    .eq('id', userId)
+    .single();
+  if (!user || !user.restricted_until) return false;
+  if (new Date(user.restricted_until).getTime() <= Date.now()) return false;
+  const mode = (await getSystemConfig('risk_enforcement_mode', 'enforce')) || 'enforce';
+  return mode === 'enforce';
 }
 
 function setupSocket(io) {
@@ -59,6 +73,15 @@ function setupSocket(io) {
       // 检查自己是否被封禁
       if (await isBanned(userId)) {
         socket.emit('account:banned', { error: '账号已被封禁' });
+        return;
+      }
+
+      // Phase 3：检查自己是否被冻结（审核中）
+      if (await isFrozenNow(userId)) {
+        socket.emit('chat:error', {
+          code: 'UNDER_REVIEW',
+          error: '账号审核中，暂时无法发送消息',
+        });
         return;
       }
 

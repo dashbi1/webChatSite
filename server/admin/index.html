@@ -70,6 +70,9 @@
       <div class="nav-item" :class="{active: tab==='posts'}" @click="tab='posts'; loadPosts()">帖子管理</div>
       <div class="nav-item" :class="{active: tab==='reports'}" @click="tab='reports'; loadReports()">举报处理</div>
       <div class="nav-item" :class="{active: tab==='risk'}" @click="tab='risk'; loadRisk()">风控管理</div>
+      <div class="nav-item" :class="{active: tab==='clusters'}" @click="tab='clusters'; loadClusters()">账号簇</div>
+      <div class="nav-item" :class="{active: tab==='bulkban'}" @click="tab='bulkban'">批量封禁</div>
+      <div class="nav-item" :class="{active: tab==='appeals'}" @click="tab='appeals'; loadAppeals()">申诉处理</div>
     </div>
 
     <div class="main">
@@ -264,6 +267,162 @@
         </div>
       </div>
 
+      <!-- 账号簇视图（Phase 3） -->
+      <div v-if="tab==='clusters'">
+        <h2>账号簇</h2>
+        <div class="toolbar">
+          <select v-model="clusterType" @change="loadClusters()">
+            <option value="fingerprint">按指纹</option>
+            <option value="ip_cidr24">按 IP /24 段</option>
+          </select>
+          <label style="display:flex; align-items:center; gap:6px;">
+            最少账号数：
+            <input type="number" v-model.number="clusterMin" min="2" max="50" style="width:70px; padding:6px 8px; border:1px solid #ddd; border-radius:4px;" />
+          </label>
+          <button class="btn btn-info" @click="loadClusters()">刷新</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>簇标识</th>
+              <th>账号数</th>
+              <th>最近活跃</th>
+              <th>成员（前 6 个）</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="c in clusters" :key="clusterKey(c)">
+              <td>
+                <strong v-if="clusterType==='fingerprint'">{{ (c.fingerprint_hash||'').slice(0,12) }}...</strong>
+                <strong v-else>{{ c.ip_cidr_24 }}</strong>
+                <br>
+                <span style="font-size:11px; color:#999;">
+                  {{ clusterType==='fingerprint' ? c.platform : (c.ip_count + ' IPs') }}
+                </span>
+              </td>
+              <td><strong style="color:#e74c3c;">{{ c.account_count }}</strong></td>
+              <td style="font-size:11px;">{{ fmtDate(c.last_seen_at) }}</td>
+              <td style="font-size:11px; color:#666;">
+                <div v-for="id in (c.account_ids || []).slice(0, 6)" :key="id">{{ id.slice(0,8) }}...</div>
+                <span v-if="(c.account_ids||[]).length > 6">等 {{ c.account_count }} 人</span>
+              </td>
+              <td>
+                <button v-if="clusterType==='fingerprint'" class="btn btn-danger" @click="banClusterFingerprint(c)">一键封簇</button>
+                <button v-else class="btn btn-danger" @click="banClusterIp(c)">一键封簇</button>
+              </td>
+            </tr>
+            <tr v-if="clusters.length === 0">
+              <td colspan="5" style="text-align:center; color:#999; padding:24px;">没有符合条件的簇</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 批量封禁（Phase 3） -->
+      <div v-if="tab==='bulkban'">
+        <h2>批量封禁</h2>
+        <div style="background:#fff; padding:20px; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+          <div style="margin-bottom:12px;">
+            <label>封禁模式：</label>
+            <select v-model="bulkMode" @change="bulkPreview=null" style="padding:6px 10px;">
+              <option value="score_gt">按风险分 >= 阈值</option>
+              <option value="same_ip_recent">按最近 N 小时同 IP</option>
+              <option value="keyword">按帖子关键词</option>
+              <option value="cluster_fingerprint">按指纹簇</option>
+            </select>
+          </div>
+
+          <!-- 参数输入 -->
+          <div v-if="bulkMode==='score_gt'" style="margin-bottom:12px;">
+            <label>风险分阈值：<input type="number" v-model.number="bulkParams.threshold" min="0" max="200" style="width:80px; padding:6px;" /></label>
+          </div>
+          <div v-if="bulkMode==='same_ip_recent'" style="margin-bottom:12px;">
+            <label style="margin-right:16px;">IP：<input v-model="bulkParams.ip" placeholder="1.2.3.4" style="width:160px; padding:6px;" /></label>
+            <label>最近：<input type="number" v-model.number="bulkParams.hours" min="1" max="168" style="width:60px; padding:6px;" /> 小时</label>
+          </div>
+          <div v-if="bulkMode==='keyword'" style="margin-bottom:12px;">
+            <label>关键词：<input v-model="bulkParams.keyword" placeholder="如: 垃圾广告" style="width:240px; padding:6px;" /></label>
+          </div>
+          <div v-if="bulkMode==='cluster_fingerprint'" style="margin-bottom:12px;">
+            <label>指纹 ID：<input v-model="bulkParams.fingerprint_id" placeholder="fingerprint UUID" style="width:320px; padding:6px;" /></label>
+          </div>
+
+          <div style="margin-bottom:12px;">
+            <label>封禁理由：<input v-model="bulkReason" placeholder="选填，缺省按模式自动生成" style="width:320px; padding:6px;" /></label>
+          </div>
+
+          <button class="btn btn-info" @click="runBulkPreview()">预览候选</button>
+          <button class="btn btn-danger" style="margin-left:12px;" :disabled="!bulkPreview || bulkPreview.count === 0" @click="runBulkExecute()">确认封禁</button>
+        </div>
+
+        <div v-if="bulkPreview" style="background:#fff; margin-top:16px; padding:20px; border-radius:8px;">
+          <h3 style="margin-bottom:12px;">预览结果：<span style="color:#e74c3c;">{{ bulkPreview.count }}</span> 个候选</h3>
+          <table>
+            <thead><tr><th>用户 ID</th><th>邮箱</th><th>昵称</th><th>风险分</th></tr></thead>
+            <tbody>
+              <tr v-for="u in (bulkPreview.users || []).slice(0, 100)" :key="u.id">
+                <td style="font-size:11px;">{{ (u.id||'').slice(0,8) }}...</td>
+                <td>{{ u.email || '-' }}</td>
+                <td>{{ u.nickname || '-' }}</td>
+                <td>{{ u.risk_score ?? '-' }}</td>
+              </tr>
+              <tr v-if="bulkPreview.count > 100">
+                <td colspan="4" style="color:#999;">仅显示前 100 条</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 申诉处理（Phase 3） -->
+      <div v-if="tab==='appeals'">
+        <h2>申诉处理</h2>
+        <div class="toolbar">
+          <select v-model="appealStatusFilter" @change="loadAppeals()">
+            <option value="pending">待处理</option>
+            <option value="approved">已通过</option>
+            <option value="rejected">已拒绝</option>
+            <option value="">全部</option>
+          </select>
+          <button class="btn btn-info" @click="loadAppeals()">刷新</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>时间</th>
+              <th>申诉用户</th>
+              <th>联系邮箱</th>
+              <th>理由</th>
+              <th>状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="a in appeals" :key="a.id">
+              <td style="font-size:11px;">{{ fmtDate(a.created_at) }}</td>
+              <td>
+                <div>{{ a.user?.nickname || '-' }}</div>
+                <span style="font-size:11px; color:#999;">{{ a.user?.email || a.user_id?.slice(0,8) }}</span>
+              </td>
+              <td style="font-size:12px;">{{ a.contact_email }}</td>
+              <td style="max-width:360px; font-size:12px; color:#333;">{{ a.reason }}</td>
+              <td><span class="badge" :class="'badge-'+(a.status==='pending'?'pending':(a.status==='approved'?'active':'dismissed'))">{{ a.status }}</span></td>
+              <td>
+                <template v-if="a.status === 'pending'">
+                  <button class="btn btn-success" @click="resolveAppeal(a, 'approved')">通过</button>
+                  <button class="btn btn-warn" @click="resolveAppeal(a, 'rejected')">拒绝</button>
+                </template>
+                <span v-else style="color:#999;">{{ a.admin_note || '-' }}</span>
+              </td>
+            </tr>
+            <tr v-if="appeals.length === 0">
+              <td colspan="6" style="text-align:center; color:#999; padding:24px;">暂无申诉</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <!-- 举报处理 -->
       <div v-if="tab==='reports'">
         <h2>举报处理</h2>
@@ -340,6 +499,21 @@ createApp({
     const reports = ref([]);
     const reportPage = ref(1);
     const reportStatus = ref('pending');
+
+    // Phase 3：账号簇
+    const clusters = ref([]);
+    const clusterType = ref('fingerprint');
+    const clusterMin = ref(3);
+
+    // Phase 3：批量封禁
+    const bulkMode = ref('score_gt');
+    const bulkParams = ref({ threshold: 70, ip: '', hours: 1, keyword: '', fingerprint_id: '' });
+    const bulkReason = ref('');
+    const bulkPreview = ref(null);
+
+    // Phase 3：申诉处理
+    const appeals = ref([]);
+    const appealStatusFilter = ref('pending');
 
     function headers() {
       return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token.value };
@@ -480,6 +654,121 @@ createApp({
       riskStats.value = data.data || [];
     }
 
+    // ========== 账号簇（Phase 3）==========
+    async function loadClusters() {
+      const url = BASE + '/admin/clusters?type=' + clusterType.value + '&min=' + (clusterMin.value || 3);
+      const res = await fetch(url, { headers: headers() });
+      const data = await res.json();
+      clusters.value = data.data || [];
+    }
+
+    function clusterKey(c) {
+      return clusterType.value === 'fingerprint' ? c.fingerprint_id : String(c.ip_cidr_24);
+    }
+
+    async function banClusterFingerprint(c) {
+      if (!confirm('确认封禁该指纹下全部 ' + c.account_count + ' 个账号？')) return;
+      const res = await fetch(BASE + '/admin/bulk-ban/execute', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({
+          mode: 'cluster_fingerprint',
+          params: { fingerprint_id: c.fingerprint_id },
+          reason: '一键封指纹簇 ' + (c.fingerprint_hash || '').slice(0, 12),
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('已封禁 ' + data.banned_count + ' 个账号');
+        loadClusters();
+      } else {
+        alert('封禁失败：' + (data.error || '未知错误'));
+      }
+    }
+
+    async function banClusterIp(c) {
+      if (!confirm('确认封禁 ' + c.ip_cidr_24 + ' 段下全部 ' + c.account_count + ' 个账号？')) return;
+      // 无专门的"按 cidr 封"模式，改成逐个 IP 走 same_ip_recent，或这里直接用第一个 IP 示意
+      // 简化：用 same_ip_recent 按 CIDR 的首 IP 快速查
+      alert('暂请到"批量封禁"选 same_ip_recent 用具体 IP 封禁\n或用指纹簇维度');
+    }
+
+    // ========== 批量封禁（Phase 3）==========
+    async function runBulkPreview() {
+      bulkPreview.value = null;
+      const payload = { mode: bulkMode.value, params: buildBulkParams() };
+      const res = await fetch(BASE + '/admin/bulk-ban/preview', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.success) {
+        bulkPreview.value = data.data;
+      } else {
+        alert('预览失败：' + (data.error || '未知'));
+      }
+    }
+
+    async function runBulkExecute() {
+      if (!bulkPreview.value || !bulkPreview.value.count) return;
+      if (!confirm('确认封禁 ' + bulkPreview.value.count + ' 个账号？此操作不可轻易撤销！')) return;
+      const payload = {
+        mode: bulkMode.value,
+        params: buildBulkParams(),
+        reason: bulkReason.value || undefined,
+      };
+      const res = await fetch(BASE + '/admin/bulk-ban/execute', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('已封禁 ' + data.banned_count + ' 个账号');
+        bulkPreview.value = null;
+      } else {
+        alert('封禁失败：' + (data.error || '未知'));
+      }
+    }
+
+    function buildBulkParams() {
+      const mode = bulkMode.value;
+      const p = bulkParams.value;
+      if (mode === 'score_gt') return { threshold: Number(p.threshold) };
+      if (mode === 'same_ip_recent') return { ip: p.ip, hours: Number(p.hours) };
+      if (mode === 'keyword') return { keyword: p.keyword };
+      if (mode === 'cluster_fingerprint') return { fingerprint_id: p.fingerprint_id };
+      return {};
+    }
+
+    // ========== 申诉处理（Phase 3）==========
+    async function loadAppeals() {
+      const statusQ = appealStatusFilter.value ? '?status=' + appealStatusFilter.value : '';
+      const url = BASE + '/admin/appeals/all' + statusQ;
+      const res = await fetch(url, { headers: headers() });
+      const data = await res.json();
+      appeals.value = data.data || [];
+    }
+
+    async function resolveAppeal(a, status) {
+      const note = prompt(status === 'approved' ? '通过理由（可选）:' : '拒绝理由（可选）:') || null;
+      const res = await fetch(BASE + '/admin/appeals/' + a.id + '/resolve', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ status, note }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        a.status = status;
+        a.admin_note = note;
+        if (status === 'approved') alert('已通过（自动 -30 分 + 解封）');
+        else alert('已拒绝');
+      } else {
+        alert('处理失败：' + (data.error || '未知'));
+      }
+    }
+
     async function handleReport(r, action) {
       const label = action === 'resolve' ? '处理' : '驳回';
       if (!confirm('确认' + label + '该举报？')) return;
@@ -508,6 +797,11 @@ createApp({
       riskAudit, loadRiskAudit,
       riskEvents, riskEventsMode, riskEventsRuleCode, loadRiskEvents,
       riskStats, riskStatsHours, loadRiskStats,
+      // Phase 3
+      clusters, clusterType, clusterMin, loadClusters, clusterKey,
+      banClusterFingerprint, banClusterIp,
+      bulkMode, bulkParams, bulkReason, bulkPreview, runBulkPreview, runBulkExecute,
+      appeals, appealStatusFilter, loadAppeals, resolveAppeal,
       fmtDate,
     };
   }

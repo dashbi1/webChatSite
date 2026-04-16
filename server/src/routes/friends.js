@@ -1,12 +1,13 @@
 const express = require('express');
 const supabase = require('../config/supabase');
 const { authMiddleware } = require('../middleware/auth');
+const { riskEnforcer } = require('../middleware/riskEnforcer');
 const { createNotification } = require('../utils/notify');
 
 const router = express.Router();
 
-// 发送好友申请
-router.post('/request', authMiddleware, async (req, res) => {
+// 发送好友申请（Phase 3：冻结用户拒）
+router.post('/request', authMiddleware, riskEnforcer(), async (req, res) => {
   const { addressee_id } = req.body;
   const requesterId = req.user.id;
 

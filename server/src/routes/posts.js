@@ -3,7 +3,10 @@ const supabase = require('../config/supabase');
 const { authMiddleware } = require('../middleware/auth');
 const { apkSignatureCheck } = require('../middleware/apkSignature');
 const { fingerprintRecorder } = require('../middleware/fingerprintRecorder');
+const { riskEnforcer } = require('../middleware/riskEnforcer');
 const { triggerRiskEval } = require('../services/riskEngine/triggerAsync');
+const { shouldShadowPost } = require('../services/enforcement/shadowBan');
+const { getSystemConfig } = require('../services/config/systemConfig');
 
 const router = express.Router();
 
@@ -47,7 +50,7 @@ router.get('/detail/:id', authMiddleware, async (req, res) => {
   });
 });
 
-// 获取信息流
+// 获取信息流（Phase 3：shadow 帖子只对作者本人可见）
 router.get('/', authMiddleware, async (req, res) => {
   const { page = 1, limit = 20, sort = 'latest' } = req.query;
   const offset = (page - 1) * limit;
@@ -59,12 +62,16 @@ router.get('/', authMiddleware, async (req, res) => {
     const result = await supabase.rpc('get_hot_posts', { p_offset: Number(offset), p_limit: Number(limit) });
     posts = result.data;
     error = result.error;
+    // 对热门排序也做 shadow 过滤（内存层，避免改 SQL 函数）
+    if (!error && Array.isArray(posts)) {
+      posts = posts.filter((p) => !p.shadow_ban || p.author_id === userId);
+    }
   } else {
-    const result = await supabase
-      .from('posts')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
+    const result = await supabase.rpc('get_timeline_posts', {
+      current_user_id: userId,
+      p_limit: Number(limit),
+      p_offset: Number(offset),
+    });
     posts = result.data;
     error = result.error;
   }
@@ -119,8 +126,8 @@ router.get('/', authMiddleware, async (req, res) => {
   res.json({ success: true, data: result });
 });
 
-// 发布帖子（反滥用：记录指纹/IP + APK 签名校验 + 异步规则评估）
-router.post('/', authMiddleware, apkSignatureCheck, fingerprintRecorder(), async (req, res) => {
+// 发布帖子（反滥用：记录指纹/IP + APK 签名校验 + 风控冻结拦截 + shadow 抽样 + 异步规则评估）
+router.post('/', authMiddleware, riskEnforcer(), apkSignatureCheck, fingerprintRecorder(), async (req, res) => {
   const { content, media_urls = [] } = req.body;
   const userId = req.user.id;
 
@@ -136,6 +143,10 @@ router.post('/', authMiddleware, apkSignatureCheck, fingerprintRecorder(), async
 
   const mediaType = getMediaType(media_urls);
 
+  // Phase 3：shadow 用户按 sample_rate 抽样写 shadow_ban=true（别人刷不到）
+  const sampleRate = Number(await getSystemConfig('shadow_ban_sample_rate', 0.5));
+  const shadow = shouldShadowPost(req.user, sampleRate);
+
   const { data: inserted, error } = await supabase
     .from('posts')
     .insert({
@@ -143,6 +154,7 @@ router.post('/', authMiddleware, apkSignatureCheck, fingerprintRecorder(), async
       content: content.trim(),
       media_urls: media_urls,
       media_type: mediaType,
+      shadow_ban: shadow,
     })
     .select('*')
     .single();
@@ -231,8 +243,8 @@ router.put('/:id', authMiddleware, async (req, res) => {
   res.json({ success: true, data: updated });
 });
 
-// 点赞 / 取消点赞
-router.post('/:id/like', authMiddleware, async (req, res) => {
+// 点赞 / 取消点赞（Phase 3：冻结拒、shadow 用户"假点赞"）
+router.post('/:id/like', authMiddleware, riskEnforcer(), async (req, res) => {
   const { id: postId } = req.params;
   const userId = req.user.id;
 
@@ -277,25 +289,31 @@ router.post('/:id/like', authMiddleware, async (req, res) => {
     await supabase.rpc('decrement_like_count', { post_id_input: postId });
     res.json({ success: true, data: { liked: false } });
   } else {
-    // 点赞
+    // Phase 3 shadow：按 sample_rate 抽样"假点赞"（不写 likes + 不累加计数）
+    const sampleRate = Number(await getSystemConfig('shadow_ban_sample_rate', 0.5));
+    if (shouldShadowPost(req.user, sampleRate)) {
+      return res.json({ success: true, data: { liked: true } });
+    }
+    // 正常点赞
     await supabase.from('likes').insert({ user_id: userId, post_id: postId });
     await supabase.rpc('increment_like_count', { post_id_input: postId });
     res.json({ success: true, data: { liked: true } });
   }
 });
 
-// 获取评论列表
+// 获取评论列表（Phase 3：shadow 评论只对作者本人可见）
 router.get('/:id/comments', authMiddleware, async (req, res) => {
   const { id: postId } = req.params;
   const { page = 1, limit = 20 } = req.query;
   const offset = (page - 1) * limit;
+  const viewerId = req.user.id;
 
-  const { data: comments, error } = await supabase
-    .from('comments')
-    .select('*')
-    .eq('post_id', postId)
-    .order('created_at', { ascending: true })
-    .range(offset, offset + limit - 1);
+  const { data: comments, error } = await supabase.rpc('get_post_comments_visible', {
+    p_post_id: postId,
+    current_user_id: viewerId,
+    p_limit: Number(limit),
+    p_offset: Number(offset),
+  });
 
   if (error) {
     return res.status(500).json({ success: false, error: '获取评论失败' });
@@ -314,8 +332,8 @@ router.get('/:id/comments', authMiddleware, async (req, res) => {
   res.json({ success: true, data: enriched });
 });
 
-// 发表评论
-router.post('/:id/comments', authMiddleware, async (req, res) => {
+// 发表评论（Phase 3：冻结拒、shadow 抽样）
+router.post('/:id/comments', authMiddleware, riskEnforcer(), async (req, res) => {
   const { id: postId } = req.params;
   const { content } = req.body;
   const userId = req.user.id;
@@ -351,9 +369,13 @@ router.post('/:id/comments', authMiddleware, async (req, res) => {
     }
   }
 
+  // Phase 3 shadow：shadow 用户评论按 sample_rate 抽样写 shadow_ban=true
+  const sampleRate = Number(await getSystemConfig('shadow_ban_sample_rate', 0.5));
+  const shadow = shouldShadowPost(req.user, sampleRate);
+
   const { data: comment, error } = await supabase
     .from('comments')
-    .insert({ user_id: userId, post_id: postId, content: content.trim() })
+    .insert({ user_id: userId, post_id: postId, content: content.trim(), shadow_ban: shadow })
     .select('*')
     .single();
 
@@ -369,8 +391,10 @@ router.post('/:id/comments', authMiddleware, async (req, res) => {
     .single();
   comment.user = commentUser;
 
-  // 更新帖子评论计数
-  await supabase.rpc('increment_comment_count', { post_id_input: postId });
+  // 更新帖子评论计数（shadow 评论不计入公开计数）
+  if (!shadow) {
+    await supabase.rpc('increment_comment_count', { post_id_input: postId });
+  }
 
   res.json({ success: true, data: comment });
 });

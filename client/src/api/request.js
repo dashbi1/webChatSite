@@ -54,6 +54,24 @@ export function request(options) {
           reject(new Error('账号已被封禁'));
           return;
         }
+        // Phase 3：账号冻结/审核中（仅对关键动作返回此码）
+        if (res.statusCode === 403 && res.data?.code === 'UNDER_REVIEW') {
+          uni.showToast({
+            title: res.data.error || '账号审核中，暂时无法进行此操作',
+            icon: 'none',
+          });
+          reject(new Error(res.data.error || '账号审核中'));
+          return;
+        }
+        // Phase 3：功能尚未开放（如申诉 appeals_enabled=false）
+        if (res.statusCode === 503 && res.data?.code === 'COMING_SOON') {
+          uni.showToast({
+            title: res.data.error || '功能开发中，敬请期待',
+            icon: 'none',
+          });
+          reject(new Error(res.data.error || '功能开发中'));
+          return;
+        }
         if (res.statusCode >= 400) {
           const msg = res.data?.error || '请求失败';
           uni.showToast({ title: msg, icon: 'none' });
