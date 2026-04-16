@@ -24,7 +24,7 @@ VPS_DIR="/opt/hit-circle"
 # 示例：
 #   SSH_KEY="$HOME/.ssh/id_ed25519_vps"
 #   SSH_KEY="/d/keys/my-vps.pem"
-SSH_KEY=""
+SSH_KEY="$HOME/.ssh/google-vps-free-sshKey"
 # ==========================================
 
 # 判断是否需要 sudo（非 root 用户时才用）
@@ -152,7 +152,9 @@ echo "[完成] 文件同步成功"
 echo ""
 echo "[5/5] 是否在 VPS 上运行 install.sh 安装 Node/PM2/Nginx？"
 echo "      （如果已经装过，可以跳过，等会手动 pm2 restart hit-circle 即可）"
-read -p "运行 install.sh？(y/N) " -n 1 -r
+# 无 TTY / 被后台化时 read 会失败；用 || true + 默认值兜底，避免 set -e 误杀脚本
+REPLY=""
+read -p "运行 install.sh？(y/N) " -n 1 -r || REPLY=""
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
   ssh "${SSH_OPTS[@]}" -t "$VPS_USER@$VPS_IP" "$SUDO $VPS_DIR/server/deploy/install.sh"

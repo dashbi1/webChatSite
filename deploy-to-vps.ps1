@@ -34,7 +34,7 @@ $VpsDir    = '/opt/hit-circle'
 # 示例：
 #   $SshKey = "$env:USERPROFILE\.ssh\id_ed25519_vps"
 #   $SshKey = 'D:\keys\my-vps.pem'
-$SshKey    = ''
+$SshKey    = 'C:\Users\n\.ssh\google-vps-free-sshKey'
 # ==========================================
 
 # 判断是否需要 sudo（非 root 用户时）

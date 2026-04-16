@@ -11,7 +11,7 @@
 #   ip                - 用户直接用 https://VPS_IP 访问
 #   cloudflare        - 单域名经 Cloudflare（一个 server_name）
 #   cloudflare-split  - 双子域名：www 给浏览器 + app 给 APK（推荐）
-DEPLOY_MODE=ip
+DEPLOY_MODE=cloudflare-split
 
 # ============ 单域名模式（ip / cloudflare） ============
 # SERVER_NAME：
@@ -22,9 +22,9 @@ SERVER_NAME=YOUR_VPS_IP
 
 # ============ 双子域名模式（cloudflare-split） ============
 # 浏览器入口（www.）：服务 H5 + API + Socket.io + 管理后台
-WEB_SERVER_NAME=www.yourdomain.com
+WEB_SERVER_NAME=www.agent666.xyz
 # APK 入口（app.）：服务 API + Socket.io（其他请求 301 到 www.）
-API_SERVER_NAME=app.yourdomain.com
+API_SERVER_NAME=app.agent666.xyz
 
 # ============ 通用配置 ============
 # 后端端口（与 server/.env 中的 PORT 一致）
@@ -33,8 +33,8 @@ BACKEND_PORT=3000
 # SSL 证书路径
 #   - ip 模式          → 你原来的 IP/域名证书
 #   - cloudflare*      → Cloudflare Origin Certificate（需覆盖用到的子域名）
-SSL_CERT_PATH=/path/to/cert.pem
-SSL_KEY_PATH=/path/to/key.pem
+SSL_CERT_PATH=/etc/ssl/cloudflare/origin.pem
+SSL_KEY_PATH=/etc/ssl/cloudflare/origin.key
 
 # 管理后台路径（与 server/.env 中的 ADMIN_PATH 一致）
 ADMIN_PATH=console-k8m2x7

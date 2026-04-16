@@ -6,8 +6,9 @@
 //   const fp = await getFingerprint();   // { hash, details }
 //
 // 行为：
-//   - 首次调用时异步加载 FingerprintJS + 采集组件，后续直接读缓存
-//   - 失败（网络、CSP、浏览器禁用）→ 返回 null，调用方照常发请求（后端规则 NO_FINGERPRINT 会 +5）
+//   - 通过 CDN <script async> 加载 FingerprintJS，避免 Vite 打包内部动态 import 的路径 bug
+//   - 首次调用时等待 CDN 就绪 + 采集，后续直接读缓存
+//   - 失败（CDN 超时、CSP、浏览器禁用）→ 返回 null，不阻塞请求（后端规则 NO_FINGERPRINT +5）
 //   - 浏览器/APK 同一套代码：APK 的 WebView 也是 H5 运行时
 
 let cache = null;
@@ -50,9 +51,26 @@ async function withTimeout(promise, ms) {
   ]);
 }
 
+// 轮询 window.FingerprintJS，等待 CDN async script 加载完毕
+// 超时由外层 withTimeout(collect(), COLLECT_TIMEOUT_MS) 控制，不在此处设上限
+function waitForCDN() {
+  if (typeof window !== 'undefined' && window.FingerprintJS) {
+    return Promise.resolve(window.FingerprintJS);
+  }
+  return new Promise((resolve) => {
+    const poll = () => {
+      if (typeof window !== 'undefined' && window.FingerprintJS) {
+        resolve(window.FingerprintJS);
+      } else {
+        setTimeout(poll, 50);
+      }
+    };
+    poll();
+  });
+}
+
 async function collect() {
-  // 动态 import 避免启动时阻塞；FingerprintJS 较大（~70KB gzipped）
-  const FingerprintJS = await import('@fingerprintjs/fingerprintjs');
+  const FingerprintJS = await waitForCDN();
   const agent = await FingerprintJS.load({ monitoring: false });
   const result = await agent.get();
   return {

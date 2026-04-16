@@ -10,6 +10,8 @@
         (coverSupport ? ', viewport-fit=cover' : '') + '" />')
     </script>
     <title></title>
+    <!-- FingerprintJS - CDN 加载避免 Vite 内部动态 import chunk 路径 bug -->
+    <script async src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@4/dist/fp.min.js"></script>
     <!--preload-links-->
     <!--app-context-->
   </head>
