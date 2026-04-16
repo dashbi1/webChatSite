@@ -52,6 +52,8 @@ if ($SshKey -ne '') {
   # 避免某些 key 被 agent 覆盖
   $SshOpts += '-o', 'IdentitiesOnly=yes'
 }
+# 压掉无害的通道警告（channel_by_id: bad id 等）
+$SshOpts += '-o', 'LogLevel=ERROR'
 
 # 远端暂存目录（普通用户可写）
 $ts = [int][double]::Parse((Get-Date -UFormat %s))

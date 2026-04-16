@@ -42,6 +42,8 @@ if [ -n "$SSH_KEY" ]; then
   fi
   SSH_OPTS=(-i "$SSH_KEY" -o IdentitiesOnly=yes)
 fi
+# 压掉无害的通道警告（channel_by_id: bad id 等）
+SSH_OPTS+=(-o LogLevel=ERROR)
 
 # 远端上传暂存目录（普通用户可写）
 REMOTE_STAGE="/tmp/hit-circle-deploy-$(date +%s)"
