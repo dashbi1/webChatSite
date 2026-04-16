@@ -24,6 +24,9 @@ const app = express();
 // 搭配 src/utils/ip.js 的 getClientIp 使用
 app.set('trust proxy', 1);
 
+// 反滥用：启动时注册 12 条风控规则到引擎（测试环境也要注册以便集成测试跑）
+require('./services/riskEngine/rules').registerAll();
+
 // 中间件
 app.use(cors());
 app.use(express.json());

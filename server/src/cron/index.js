@@ -5,6 +5,7 @@ const cron = require('node-cron');
 const {
   updateDisposableDomains,
 } = require('../services/disposableEmails/updateFromGithub');
+const { updateAccountCounts } = require('./updateAccountCounts');
 
 let started = false;
 const tasks = [];
@@ -34,6 +35,9 @@ function startCron() {
 
   // 每日 03:00 拉取最新一次性邮箱域名
   scheduleTask('0 3 * * *', 'updateDisposableDomains', updateDisposableDomains);
+
+  // 每 30 分钟更新 fingerprints/ip_records.account_count
+  scheduleTask('*/30 * * * *', 'updateAccountCounts', updateAccountCounts);
 
   console.log(`[cron] ${tasks.length} tasks scheduled`);
 }

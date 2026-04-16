@@ -1,6 +1,9 @@
 const express = require('express');
 const supabase = require('../config/supabase');
 const { authMiddleware } = require('../middleware/auth');
+const { apkSignatureCheck } = require('../middleware/apkSignature');
+const { fingerprintRecorder } = require('../middleware/fingerprintRecorder');
+const { triggerRiskEval } = require('../services/riskEngine/triggerAsync');
 
 const router = express.Router();
 
@@ -116,8 +119,8 @@ router.get('/', authMiddleware, async (req, res) => {
   res.json({ success: true, data: result });
 });
 
-// 发布帖子
-router.post('/', authMiddleware, async (req, res) => {
+// 发布帖子（反滥用：记录指纹/IP + APK 签名校验 + 异步规则评估）
+router.post('/', authMiddleware, apkSignatureCheck, fingerprintRecorder(), async (req, res) => {
   const { content, media_urls = [] } = req.body;
   const userId = req.user.id;
 
@@ -155,6 +158,10 @@ router.post('/', authMiddleware, async (req, res) => {
     .select('id, nickname, avatar_url, college')
     .eq('id', userId)
     .single();
+
+  // 反滥用：异步评估 post_create 规则
+  //   REGISTER_QUICK_POST / NEW_ACCOUNT_BURST / SIMHASH_SIMILAR 等
+  triggerRiskEval(userId, 'post_create', req, { post: inserted });
 
   res.json({
     success: true,

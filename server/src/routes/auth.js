@@ -16,6 +16,11 @@ const {
 const {
   isDisposable,
 } = require('../services/disposableEmails/loader');
+const { apkSignatureCheck } = require('../middleware/apkSignature');
+const { recordFingerprint } = require('../services/fingerprint/recordFingerprint');
+const { recordIp } = require('../services/ip/recordIp');
+const { triggerRiskEval, ensureAbuse } = require('../services/riskEngine/triggerAsync');
+const { getClientIp } = require('../utils/ip');
 
 const router = express.Router();
 
@@ -91,8 +96,8 @@ router.post(
   }
 );
 
-// 注册（限流：同 IP 每天最多 3 个账号）
-router.post('/register', rateLimitRegister(), async (req, res) => {
+// 注册（限流 + APK 签名校验 + 反滥用指纹/IP 记录）
+router.post('/register', rateLimitRegister(), apkSignatureCheck, async (req, res) => {
   const { email, code, password, nickname } = req.body;
 
   if (!validateEmail(email)) {
@@ -142,6 +147,17 @@ router.post('/register', rateLimitRegister(), async (req, res) => {
     process.env.JWT_SECRET,
     { expiresIn: '7d' }
   );
+
+  // 反滥用：建立 user ↔ fingerprint / IP 关联 + 异步评估 register 规则
+  ensureAbuse(req);
+  const ip = getClientIp(req);
+  recordFingerprint(req, user.id).catch((e) =>
+    console.warn('[register] recordFingerprint:', e && e.message)
+  );
+  recordIp(ip, user.id).catch((e) =>
+    console.warn('[register] recordIp:', e && e.message)
+  );
+  triggerRiskEval(user.id, 'register', req, {});
 
   res.json({ success: true, data: { user, token } });
 });
