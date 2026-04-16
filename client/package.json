@@ -39,6 +39,7 @@
     "@capacitor/android": "^6.2.1",
     "@capacitor/core": "^6.2.1",
     "@dcloudio/uni-app": "3.0.0-5000620260331001",
+    "@fingerprintjs/fingerprintjs": "^4.5.1",
     "@dcloudio/uni-app-harmony": "3.0.0-5000620260331001",
     "@dcloudio/uni-app-plus": "3.0.0-5000620260331001",
     "@dcloudio/uni-components": "3.0.0-5000620260331001",

@@ -1,10 +1,29 @@
 import { API_BASE } from '../config/env';
+import { getFingerprint, encodeDetails } from '../utils/fingerprint';
+
 const BASE_URL = API_BASE;
 
+// 包装 uni.request 以便：
+//   - 自动附加 JWT
+//   - 自动附加设备指纹 header（失败不阻塞）
+//   - 统一错误处理（401 踢出登录；403 BANNED；其余 >=400 toast）
 export function request(options) {
   const token = uni.getStorageSync('token');
 
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
+    // 反滥用：尝试拿指纹；失败不阻塞
+    let fpHeaders = {};
+    try {
+      const fp = await getFingerprint();
+      if (fp && fp.hash) {
+        fpHeaders['X-Device-Fingerprint'] = fp.hash;
+        const encoded = encodeDetails(fp.details);
+        if (encoded) fpHeaders['X-Device-Info'] = encoded;
+      }
+    } catch (e) {
+      // 忽略
+    }
+
     uni.request({
       url: BASE_URL + options.url,
       method: options.method || 'GET',
@@ -12,6 +31,7 @@ export function request(options) {
       header: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...fpHeaders,
         ...options.header,
       },
       success(res) {
