@@ -7,6 +7,10 @@ const { riskEnforcer } = require('../middleware/riskEnforcer');
 const { triggerRiskEval } = require('../services/riskEngine/triggerAsync');
 const { shouldShadowPost } = require('../services/enforcement/shadowBan');
 const { getSystemConfig } = require('../services/config/systemConfig');
+const {
+  rewardPostLikedByStranger,
+  rewardCommentReplied,
+} = require('../services/decay/positiveReward');
 
 const router = express.Router();
 
@@ -298,6 +302,19 @@ router.post('/:id/like', authMiddleware, riskEnforcer(), async (req, res) => {
     await supabase.from('likes').insert({ user_id: userId, post_id: postId });
     await supabase.rpc('increment_like_count', { post_id_input: postId });
     res.json({ success: true, data: { liked: true } });
+
+    // Phase 4：陌生人点赞 → 作者减分（异步不阻塞）
+    setImmediate(async () => {
+      try {
+        await rewardPostLikedByStranger({
+          postId,
+          authorId: post.author_id,
+          likerId: userId,
+        });
+      } catch (e) {
+        console.warn('[reward:post_liked] failed:', e && e.message);
+      }
+    });
   }
 });
 
@@ -397,6 +414,22 @@ router.post('/:id/comments', authMiddleware, riskEnforcer(), async (req, res) =>
   }
 
   res.json({ success: true, data: comment });
+
+  // Phase 4：评论非 shadow 时 → 作者减分（异步不阻塞）
+  if (!shadow) {
+    setImmediate(async () => {
+      try {
+        await rewardCommentReplied({
+          authorId: post.author_id,
+          replierId: userId,
+          postId,
+          commentId: comment.id,
+        });
+      } catch (e) {
+        console.warn('[reward:comment_replied] failed:', e && e.message);
+      }
+    });
+  }
 });
 
 module.exports = router;

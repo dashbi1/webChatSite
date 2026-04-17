@@ -3,6 +3,7 @@ const supabase = require('../config/supabase');
 const { authMiddleware } = require('../middleware/auth');
 const { riskEnforcer } = require('../middleware/riskEnforcer');
 const { createNotification } = require('../utils/notify');
+const { rewardFriendAccepted } = require('../services/decay/positiveReward');
 
 const router = express.Router();
 
@@ -139,6 +140,20 @@ router.put('/request/:id', authMiddleware, async (req, res) => {
   }
 
   res.json({ success: true, data: updated });
+
+  // Phase 4：接受好友申请 → 申请方减分（异步不阻塞）
+  if (newStatus === 'accepted') {
+    setImmediate(async () => {
+      try {
+        await rewardFriendAccepted({
+          requesterId: friendship.requester_id,
+          addresseeId: friendship.addressee_id,
+        });
+      } catch (e) {
+        console.warn('[reward:friend_accepted] failed:', e && e.message);
+      }
+    });
+  }
 });
 
 // 好友列表

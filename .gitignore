@@ -8,3 +8,5 @@ client/unpackage/
 *.log
 server/deploy/deploy.conf
 reflection/
+*.pptx
+storekey

@@ -7,6 +7,11 @@ const {
 } = require('../services/disposableEmails/updateFromGithub');
 const { updateAccountCounts } = require('./updateAccountCounts');
 const { runIpBurstCheck } = require('./ipBurstCheck');
+const { runIsolatedIslandDetect } = require('./isolatedIslandDetect');
+const { runDecayRiskScore } = require('./decayRiskScore');
+const { runDailyRewardWeeklyActive } = require('./dailyRewardWeeklyActive');
+const { runExpireBansCron } = require('./expireBans');
+const { runArchiveRiskEventsCron } = require('./archiveRiskEvents');
 
 let started = false;
 const tasks = [];
@@ -42,6 +47,21 @@ function startCron() {
 
   // Phase 3：每 10 分钟检测 /24 IP 段注册密集度，命中则临时封 15 分钟
   scheduleTask('*/10 * * * *', 'ipBurstCheck', runIpBurstCheck);
+
+  // Phase 4：孤岛簇检测（每小时整点）
+  scheduleTask('0 * * * *', 'isolatedIslandDetect', runIsolatedIslandDetect);
+
+  // Phase 4：风险分时间衰减（每日 02:00）
+  scheduleTask('0 2 * * *', 'decayRiskScore', runDecayRiskScore);
+
+  // Phase 4：weekly_active_clean 奖励（每日 03:30，内置 7 天冷却）
+  scheduleTask('30 3 * * *', 'dailyRewardWeeklyActive', runDailyRewardWeeklyActive);
+
+  // Phase 4：过期封禁自动解除（每日 04:30）
+  scheduleTask('30 4 * * *', 'expireBans', runExpireBansCron);
+
+  // Phase 4：归档 90 天前 risk_events（每周日 04:00）
+  scheduleTask('0 4 * * 0', 'archiveRiskEvents', runArchiveRiskEventsCron);
 
   console.log(`[cron] ${tasks.length} tasks scheduled`);
 }
